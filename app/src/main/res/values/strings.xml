@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Vedicra Vastu</string>
+    <string name="brand_full_title">VEDICRA VASTU SOLUTIONS</string>
+    <string name="brand_subtitle">Professional Vastu Inspection &amp; Consultancy</string>
+    <string name="default_consultant_name">S. SATISH PATEL</string>
+    <string name="default_contact_number">9000505678</string>
+</resources>

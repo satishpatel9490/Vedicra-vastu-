@@ -1,0 +1,6 @@
+{
+  "name": "Vedicra Vastu",
+  "description": "Professional Vastu Inspection, Site Photography, Layout & Consultancy Report Application",
+  "requestFramePermissions": ["CAMERA"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
