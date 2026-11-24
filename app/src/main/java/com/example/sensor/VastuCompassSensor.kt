@@ -54,7 +54,7 @@ fun rememberVastuCompassState(enabled: Boolean = true): State<CompassReading> {
                 fun currentDisplayRotation(): Int {
                     return runCatching {
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                            context.display?.rotation ?: Surface.ROTATION_0
+                            context.display.rotation
                         } else {
                             @Suppress("DEPRECATION")
                             val wm = context.getSystemService(Context.WINDOW_SERVICE) as? WindowManager

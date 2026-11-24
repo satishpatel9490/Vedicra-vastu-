@@ -60,6 +60,7 @@ import com.example.ui.components.VedicraDropdownField
 import com.example.ui.components.VedicraSectionCard
 import com.example.ui.components.VedicraTextField
 import com.example.ui.theme.LocalVedicraColors
+import java.util.Locale
 
 private val quickPresetDegrees = listOf(
     0f to "0°/360° N",
@@ -190,7 +191,7 @@ fun DegreesAndCompassSection(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Text(
-                            text = "${String.format("%.1f", manualAzimuthDeg)}°",
+                            text = "${String.format(Locale.US, "%.1f", manualAzimuthDeg)}°",
                             style = MaterialTheme.typography.labelLarge,
                             fontWeight = FontWeight.Bold
                         )
@@ -245,7 +246,7 @@ fun DegreesAndCompassSection(
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "Current: $formattedHeading • ${activeReading.zone.attributeTitle} • Tilt ${String.format("%.1f", activeReading.tiltFromLevelDeg)}°",
+                        text = "Current: $formattedHeading • ${activeReading.zone.attributeTitle} • Tilt ${String.format(Locale.US, "%.1f", activeReading.tiltFromLevelDeg)}°",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -254,7 +255,7 @@ fun DegreesAndCompassSection(
                         text = "Note to Degrees of Plot",
                         icon = Icons.Filled.CheckCircle,
                         onClick = {
-                            val noteEntry = "Compass Plot Reading: $formattedHeading | Tilt: ${String.format("%.1f", activeReading.tiltFromLevelDeg)}° | Zone: ${activeReading.zone.fullName} (${activeReading.zone.attributeTitle})"
+                            val noteEntry = "Compass Plot Reading: $formattedHeading | Tilt: ${String.format(Locale.US, "%.1f", activeReading.tiltFromLevelDeg)}° | Zone: ${activeReading.zone.fullName} (${activeReading.zone.attributeTitle})"
                             onUpdate { curr ->
                                 val updatedObs = if (curr.propertyObservations.isBlank()) {
                                     noteEntry

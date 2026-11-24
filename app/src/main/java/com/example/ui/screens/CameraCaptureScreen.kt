@@ -36,6 +36,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.RotateRight
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Cameraswitch
@@ -45,7 +46,6 @@ import androidx.compose.material.icons.filled.FlashAuto
 import androidx.compose.material.icons.filled.FlashOff
 import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.RotateRight
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -95,6 +95,7 @@ import com.example.ui.components.CompassTopDegreeTiltHud
 import com.example.ui.components.VastuChakraCanvas
 import kotlinx.coroutines.launch
 import java.io.File
+import java.util.Locale
 import kotlin.math.abs
 
 @Composable
@@ -266,7 +267,8 @@ fun CameraCaptureScreen(
             .fillMaxSize()
             .background(Color.Black)
     ) {
-        if (pendingReviewFile == null) {
+        val reviewFile = pendingReviewFile
+        if (reviewFile == null) {
             // Live Camera Preview
             AndroidView(
                 factory = { previewView },
@@ -487,7 +489,7 @@ fun CameraCaptureScreen(
                         modifier = Modifier.weight(1f)
                     )
                     Text(
-                        text = "${(1f + linearZoom * 3f).let { String.format("%.1fx", it) }}",
+                        text = (1f + linearZoom * 3f).let { String.format(Locale.US, "%.1fx", it) },
                         color = Color.White,
                         style = MaterialTheme.typography.labelSmall
                     )
@@ -569,8 +571,8 @@ fun CameraCaptureScreen(
                                                 activeCompass.tiltFromLevelDeg
                                             }
                                             capturedOrientationTag = VastuCompassMath.formatHeadingLabel(deg)
-                                            capturedHeadingSummary = "Compass: ${String.format("%.1f", deg)}° ${activeCompass.zone.code} " +
-                                                "(${activeCompass.pada.code} ${activeCompass.pada.deity}) • Tilt: ${String.format("%.1f", tilt)}°"
+                                            capturedHeadingSummary = "Compass: ${String.format(Locale.US, "%.1f", deg)}° ${activeCompass.zone.code} " +
+                                                "(${activeCompass.pada.code} ${activeCompass.pada.deity}) • Tilt: ${String.format(Locale.US, "%.1f", tilt)}°"
                                             reviewCaption = capturedOrientationTag
                                         } else {
                                             capturedOrientationTag = ""
@@ -620,7 +622,7 @@ fun CameraCaptureScreen(
             }
         } else {
             // Instant Capture Preview & Accept / Retake / Rotate / Caption
-            val file = pendingReviewFile!!
+            val file = reviewFile
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -644,7 +646,7 @@ fun CameraCaptureScreen(
                         modifier = Modifier.minimumInteractiveComponentSize()
                     ) {
                         Icon(
-                            imageVector = Icons.Filled.RotateRight,
+                            imageVector = Icons.AutoMirrored.Filled.RotateRight,
                             contentDescription = "Rotate Photo",
                             tint = Color.White
                         )

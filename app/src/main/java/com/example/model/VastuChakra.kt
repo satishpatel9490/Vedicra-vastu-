@@ -2,6 +2,7 @@ package com.example.model
 
 import android.hardware.SensorManager
 import android.view.Surface
+import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.acos
 import kotlin.math.asin
@@ -216,7 +217,7 @@ object VastuCompassMath {
         return if (isOnNorthBoundary(norm)) {
             "0.0° / 360° N (Between N4 & N5)"
         } else {
-            "${String.format("%.1f", rounded)}° ${zone.code} (${pada.code} ${pada.deity})"
+            "${String.format(Locale.US, "%.1f", rounded)}° ${zone.code} (${pada.code} ${pada.deity})"
         }
     }
 

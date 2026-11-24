@@ -29,9 +29,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.Label
+import androidx.compose.material.icons.automirrored.filled.NoteAdd
+import androidx.compose.material.icons.automirrored.filled.RotateRight
 import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.AddLocationAlt
-import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CleaningServices
 import androidx.compose.material.icons.filled.CompassCalibration
@@ -40,11 +43,8 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.FitScreen
 import androidx.compose.material.icons.filled.GridOn
-import androidx.compose.material.icons.filled.Label
 import androidx.compose.material.icons.filled.MeetingRoom
-import androidx.compose.material.icons.filled.NoteAdd
 import androidx.compose.material.icons.filled.PanTool
-import androidx.compose.material.icons.filled.RotateRight
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.TextFields
@@ -116,6 +116,7 @@ import kotlin.math.cos
 import kotlin.math.hypot
 import kotlin.math.min
 import kotlin.math.sin
+import java.util.Locale
 
 private val workspaceColors = listOf(
     0xFF1B4D3E to "Forest",
@@ -199,7 +200,7 @@ fun LayoutWorkspaceScreen(
                         onClick = { viewModel.rotateImage90() },
                         modifier = Modifier.minimumInteractiveComponentSize()
                     ) {
-                        Icon(Icons.Filled.RotateRight, contentDescription = "Rotate Image 90°")
+                        Icon(Icons.AutoMirrored.Filled.RotateRight, contentDescription = "Rotate Image 90°")
                     }
                     IconButton(
                         onClick = { viewModel.undo() },
@@ -248,7 +249,7 @@ fun LayoutWorkspaceScreen(
                             ) {
                                 val normRot = VastuCompassMath.normalizeDegrees(meta.gridRotationDegrees)
                                 Text(
-                                    text = "Tilt: ${String.format("%.1f", normRot)}°",
+                                    text = "Tilt: ${String.format(Locale.US, "%.1f", normRot)}°",
                                     style = MaterialTheme.typography.labelSmall,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -262,7 +263,7 @@ fun LayoutWorkspaceScreen(
                                     onClick = {
                                         val aligned = VastuCompassMath.normalizeDegrees(-liveCompass.azimuthDeg)
                                         viewModel.setGridRotation(aligned)
-                                        onShowMessage("Chakra North aligned to live compass (${String.format("%.1f", liveCompass.azimuthDeg)}°)")
+                                        onShowMessage("Chakra North aligned to live compass (${String.format(Locale.US, "%.1f", liveCompass.azimuthDeg)}°)")
                                     },
                                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
                                     shape = RoundedCornerShape(8.dp),
@@ -306,7 +307,7 @@ fun LayoutWorkspaceScreen(
                                             )
                                         }
                                     ) {
-                                        Icon(Icons.Filled.RotateRight, contentDescription = "Rotate North Arrow")
+                                        Icon(Icons.AutoMirrored.Filled.RotateRight, contentDescription = "Rotate North Arrow")
                                     }
                                 }
                                 IconButton(onClick = { editingAnnotation = selectedAnnotation }) {
@@ -419,7 +420,7 @@ fun LayoutWorkspaceScreen(
                         }
                         item {
                             OutlinedButton(onClick = { showTextPromptType = AnnotationType.ZONE_LABEL }) {
-                                Icon(Icons.Filled.Label, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Icon(Icons.AutoMirrored.Filled.Label, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(Modifier.width(4.dp))
                                 Text("Zone")
                             }
@@ -433,7 +434,7 @@ fun LayoutWorkspaceScreen(
                         }
                         item {
                             OutlinedButton(onClick = { showTextPromptType = AnnotationType.AREA_NOTE }) {
-                                Icon(Icons.Filled.NoteAdd, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Icon(Icons.AutoMirrored.Filled.NoteAdd, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(Modifier.width(4.dp))
                                 Text("Area Note")
                             }
@@ -454,7 +455,7 @@ fun LayoutWorkspaceScreen(
                                     )
                                 }
                             ) {
-                                Icon(Icons.Filled.ArrowForward, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(Modifier.width(4.dp))
                                 Text("Arrow")
                             }
@@ -691,16 +692,16 @@ fun LayoutWorkspaceScreen(
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text(
-                                text = "North Tilt: ${String.format("%.1f", normTilt)}°  •  Top: ${String.format("%.1f", topFacingDeg)}° ${topZone.code}",
+                                text = "North Tilt: ${String.format(Locale.US, "%.1f", normTilt)}°  •  Top: ${String.format(Locale.US, "%.1f", topFacingDeg)}° ${topZone.code}",
                                 color = Color.White,
                                 style = MaterialTheme.typography.labelLarge,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
                                 text = if (onZeroNorth) {
-                                    "0° North strictly between N4 Bhallat ✓ & N5 Soma ✓  •  Phone Tilt: ${String.format("%.1f", liveCompass.tiltFromLevelDeg)}°"
+                                    "0° North strictly between N4 Bhallat ✓ & N5 Soma ✓  •  Phone Tilt: ${String.format(Locale.US, "%.1f", liveCompass.tiltFromLevelDeg)}°"
                                 } else {
-                                    "Pada ${topPada.code} (${topPada.deity}) • Phone Heading ${String.format("%.1f", liveCompass.azimuthDeg)}° • Tilt ${String.format("%.1f", liveCompass.tiltFromLevelDeg)}°"
+                                    "Pada ${topPada.code} (${topPada.deity}) • Phone Heading ${String.format(Locale.US, "%.1f", liveCompass.azimuthDeg)}° • Tilt ${String.format(Locale.US, "%.1f", liveCompass.tiltFromLevelDeg)}°"
                                 },
                                 color = Color(0xFFDDE5DF),
                                 style = MaterialTheme.typography.labelSmall

@@ -55,6 +55,7 @@ import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.min
 import kotlin.math.sin
+import java.util.Locale
 
 enum class CameraCompassMode(val label: String) {
     FULL_CHAKRA("Chakra"),
@@ -116,7 +117,7 @@ fun CompassTopDegreeTiltHud(
                     )
                     Column {
                         Text(
-                            text = "${String.format("%.1f", normDeg)}° ${reading.zone.code}",
+                            text = "${String.format(Locale.US, "%.1f", normDeg)}° ${reading.zone.code}",
                             color = Color.White,
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold
@@ -157,7 +158,7 @@ fun CompassTopDegreeTiltHud(
                                 modifier = Modifier.size(13.dp)
                             )
                             Text(
-                                text = "Tilt: ${String.format("%.1f", tiltDisplay)}°" +
+                                text = "Tilt: ${String.format(Locale.US, "%.1f", tiltDisplay)}°" +
                                     if (reading.isLevel) " ✓" else "",
                                 color = levelColor,
                                 fontSize = 11.sp,
@@ -213,7 +214,7 @@ fun CompassTopDegreeTiltHud(
 
                 Text(
                     text = if (reading.hasHardwareSensors) {
-                        "Pitch ${String.format("%.0f", reading.pitchDeg)}° • ${reading.accuracy.label}"
+                        "Pitch ${String.format(Locale.US, "%.0f", reading.pitchDeg)}° • ${reading.accuracy.label}"
                     } else {
                         "Manual Mode (${CompassAccuracy.MANUAL.label})"
                     },

@@ -15,10 +15,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.RotateRight
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FitScreen
 import androidx.compose.material.icons.filled.GridOn
-import androidx.compose.material.icons.filled.RotateRight
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarOutline
 import androidx.compose.material3.AlertDialog
@@ -113,7 +113,7 @@ fun PhotoViewerScreen(
                             },
                             modifier = Modifier.minimumInteractiveComponentSize()
                         ) {
-                            Icon(Icons.Filled.RotateRight, contentDescription = "Rotate 90")
+                            Icon(Icons.AutoMirrored.Filled.RotateRight, contentDescription = "Rotate 90")
                         }
                         IconButton(
                             onClick = { showEditCaptionDialog = true },
@@ -144,8 +144,9 @@ fun PhotoViewerScreen(
                 CircularProgressIndicator(color = Color.White)
             }
         } else {
-            val hasAnnotated = !current.annotatedFilePath.isNullOrBlank() && File(current.annotatedFilePath).exists()
-            val displayPath = if (showAnnotated && hasAnnotated) current.annotatedFilePath!! else current.filePath
+            val annotatedPath = current.annotatedFilePath
+            val hasAnnotated = !annotatedPath.isNullOrBlank() && File(annotatedPath).exists()
+            val displayPath = if (showAnnotated && hasAnnotated) annotatedPath else current.filePath
             val rotation = if (showAnnotated && hasAnnotated) 0f else current.rotationDegrees.toFloat()
 
             Column(

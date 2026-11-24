@@ -19,6 +19,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.RotateRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
@@ -29,7 +30,6 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.GridOn
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.PictureAsPdf
-import androidx.compose.material.icons.filled.RotateRight
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarOutline
@@ -488,8 +488,9 @@ private fun MediaItemCard(
 ) {
     val brandColors = LocalVedicraColors.current
     val dateFormat = remember { SimpleDateFormat("dd MMM yyyy, hh:mm a", Locale.getDefault()) }
-    val hasAnnotated = !media.annotatedFilePath.isNullOrBlank() && File(media.annotatedFilePath).exists()
-    val displayPath = if (hasAnnotated) media.annotatedFilePath!! else media.filePath
+    val annotatedPath = media.annotatedFilePath
+    val hasAnnotated = !annotatedPath.isNullOrBlank() && File(annotatedPath).exists()
+    val displayPath = if (hasAnnotated) annotatedPath else media.filePath
     val visualRotation = if (hasAnnotated) 0f else media.rotationDegrees.toFloat()
 
     Card(
@@ -627,7 +628,7 @@ private fun MediaItemCard(
                         )
                     }
                     IconButton(onClick = onRotate, modifier = Modifier.minimumInteractiveComponentSize()) {
-                        Icon(Icons.Filled.RotateRight, contentDescription = "Rotate 90 Degrees")
+                        Icon(Icons.AutoMirrored.Filled.RotateRight, contentDescription = "Rotate 90 Degrees")
                     }
                     IconButton(onClick = onEditDetails, modifier = Modifier.minimumInteractiveComponentSize()) {
                         Icon(Icons.Filled.Edit, contentDescription = "Edit Caption & Info")

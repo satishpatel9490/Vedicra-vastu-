@@ -1,4 +1,5 @@
 import com.google.gms.googleservices.GoogleServicesPlugin.MissingGoogleServicesStrategy
+import java.util.Base64
 
 plugins {
   alias(libs.plugins.android.application)
@@ -80,6 +81,15 @@ secrets {
 }
 
 googleServices { missingGoogleServicesStrategy = MissingGoogleServicesStrategy.WARN }
+
+// Automatically restore debug.keystore from debug.keystore.base64 when opening a Downloaded ZIP
+// or fresh Git clone in Android Studio (where debug.keystore is omitted by .gitignore).
+val debugKeystoreFile = rootProject.file("debug.keystore")
+val debugKeystoreB64 = rootProject.file("debug.keystore.base64")
+if (!debugKeystoreFile.exists() && debugKeystoreB64.exists()) {
+  val cleanedB64 = debugKeystoreB64.readText().replace("\\s".toRegex(), "")
+  debugKeystoreFile.writeBytes(Base64.getDecoder().decode(cleanedB64))
+}
 
 // Some unused dependencies are commented out below instead of being removed.
 // This makes it easy to add them back in the future if needed.

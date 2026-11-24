@@ -24,6 +24,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ListAlt
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.AttachFile
@@ -33,7 +34,6 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.ListAlt
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.TableChart
 import androidx.compose.material.icons.filled.Tune
@@ -134,7 +134,7 @@ fun UnifiedProblemsAnalysisRemediesSection(
         VedicraSectionCard(
             title = "Problems & Remedies",
             subtitle = "Select problem from dropdown, enter expected zones responsible, remarks & remedies row by row",
-            icon = Icons.Filled.ListAlt,
+            icon = Icons.AutoMirrored.Filled.ListAlt,
             headerTrailing = {
                 IconButton(
                     onClick = { fullTableMode = !fullTableMode },
@@ -143,7 +143,7 @@ fun UnifiedProblemsAnalysisRemediesSection(
                         .testTag("toggle_unified_view_mode")
                 ) {
                     Icon(
-                        imageVector = if (fullTableMode) Icons.Filled.ListAlt else Icons.Filled.TableChart,
+                        imageVector = if (fullTableMode) Icons.AutoMirrored.Filled.ListAlt else Icons.Filled.TableChart,
                         contentDescription = if (fullTableMode) "Switch to Row Form View" else "Switch to Table View"
                     )
                 }

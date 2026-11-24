@@ -13,6 +13,8 @@ import android.graphics.pdf.PdfDocument
 import android.text.Layout
 import android.text.StaticLayout
 import android.text.TextPaint
+import androidx.core.graphics.withClip
+import androidx.core.graphics.withTranslation
 import com.example.R
 import com.example.data.local.AnalysisRowEntity
 import com.example.data.local.ExportedPdfEntity
@@ -270,10 +272,9 @@ class PdfReportGenerator(
                         val logoTop = curY + (headerH - logoSize) / 2f
                         val logoRect = RectF(marginX + 12f, logoTop, marginX + 12f + logoSize, logoTop + logoSize)
                         val clipPath = Path().apply { addOval(logoRect, Path.Direction.CW) }
-                        c.save()
-                        c.clipPath(clipPath)
-                        c.drawBitmap(logoBitmap, null, logoRect, null)
-                        c.restore()
+                        c.withClip(clipPath) {
+                            drawBitmap(logoBitmap, null, logoRect, null)
+                        }
                         linePaint.color = palette.accent
                         linePaint.strokeWidth = 1.2f
                         c.drawOval(logoRect, linePaint)
@@ -365,20 +366,18 @@ class PdfReportGenerator(
                     c.drawRoundRect(RectF(marginX, curY, marginX + colW, curY + rowH - 2f), 4f, 4f, fillPaint)
                     c.drawRoundRect(RectF(marginX, curY, marginX + colW, curY + rowH - 2f), 4f, 4f, linePaint)
                     c.drawText(leftPair.first, marginX + 6f, curY + 11f, labelPaint)
-                    c.save()
-                    c.translate(marginX + 6f, curY + 14f)
-                    leftValLayout.draw(c)
-                    c.restore()
+                    c.withTranslation(marginX + 6f, curY + 14f) {
+                        leftValLayout.draw(this)
+                    }
 
                     if (rightPair != null && rightValLayout != null) {
                         val rx = marginX + colW + 12f
                         c.drawRoundRect(RectF(rx, curY, rx + colW, curY + rowH - 2f), 4f, 4f, fillPaint)
                         c.drawRoundRect(RectF(rx, curY, rx + colW, curY + rowH - 2f), 4f, 4f, linePaint)
                         c.drawText(rightPair.first, rx + 6f, curY + 11f, labelPaint)
-                        c.save()
-                        c.translate(rx + 6f, curY + 14f)
-                        rightValLayout.draw(c)
-                        c.restore()
+                        c.withTranslation(rx + 6f, curY + 14f) {
+                            rightValLayout.draw(this)
+                        }
                     }
                     curY += rowH + 2f
                     idx += 2
@@ -396,10 +395,9 @@ class PdfReportGenerator(
                 c.drawRoundRect(RectF(marginX, curY, pageWidth - marginX, curY + blockH), 4f, 4f, fillPaint)
                 c.drawRoundRect(RectF(marginX, curY, pageWidth - marginX, curY + blockH), 4f, 4f, linePaint)
                 c.drawText(label, marginX + 8f, curY + 13f, labelPaint)
-                c.save()
-                c.translate(marginX + 8f, curY + 17f)
-                valLayout.draw(c)
-                c.restore()
+                c.withTranslation(marginX + 8f, curY + 17f) {
+                    valLayout.draw(this)
+                }
                 curY += blockH + 6f
             }
 
@@ -520,10 +518,9 @@ class PdfReportGenerator(
                     c.drawRect(marginX, curY, marginX + contentWidth, curY + headerH, fillPaint)
                     var x = marginX
                     headerLayouts.forEachIndexed { i, layout ->
-                        c.save()
-                        c.translate(x + 3f, curY + 5f)
-                        layout.draw(c)
-                        c.restore()
+                        c.withTranslation(x + 3f, curY + 5f) {
+                            layout.draw(this)
+                        }
                         c.drawRect(x, curY, x + colWidths[i], curY + headerH, linePaint)
                         x += colWidths[i]
                     }
@@ -640,10 +637,9 @@ class PdfReportGenerator(
                         }
                         var x = marginX
                         cellLayouts.forEachIndexed { i, layout ->
-                            c.save()
-                            c.translate(x + 3f, curY + 5f)
-                            layout.draw(c)
-                            c.restore()
+                            c.withTranslation(x + 3f, curY + 5f) {
+                                layout.draw(this)
+                            }
                             c.drawRect(x, curY, x + colWidths[i], curY + rowH, linePaint)
                             x += colWidths[i]
                         }
@@ -694,10 +690,9 @@ class PdfReportGenerator(
                     fillPaint.color = palette.cardBg
                     c.drawRoundRect(RectF(marginX, curY, pageWidth - marginX, curY + h), 4f, 4f, fillPaint)
                     c.drawRoundRect(RectF(marginX, curY, pageWidth - marginX, curY + h), 4f, 4f, linePaint)
-                    c.save()
-                    c.translate(marginX + 8f, curY + 6f)
-                    layout.draw(c)
-                    c.restore()
+                    c.withTranslation(marginX + 8f, curY + 6f) {
+                        layout.draw(this)
+                    }
                     curY += h + 4f
                 }
                 curY += 6f
@@ -806,16 +801,14 @@ class PdfReportGenerator(
                     val subLayout = if (sub.isNotBlank()) buildLayout(sub, smallPaint, contentWidth - 12f) else null
                     ensureSpace(headLayout.height + (subLayout?.height ?: 0) + 24f)
                     val c = canvas!!
-                    c.save()
-                    c.translate(marginX + 4f, curY)
-                    headLayout.draw(c)
-                    c.restore()
+                    c.withTranslation(marginX + 4f, curY) {
+                        headLayout.draw(this)
+                    }
                     curY += headLayout.height + 3f
                     if (subLayout != null) {
-                        c.save()
-                        c.translate(marginX + 4f, curY)
-                        subLayout.draw(c)
-                        c.restore()
+                        c.withTranslation(marginX + 4f, curY) {
+                            subLayout.draw(this)
+                        }
                         curY += subLayout.height + 6f
                     }
                     drawMediaGridInPdf(
@@ -1009,10 +1002,9 @@ class PdfReportGenerator(
         } else {
             canvas.drawText("Image unavailable", x + 14f, y + imgH / 2f, labelPaint)
         }
-        canvas.save()
-        canvas.translate(x + 6f, y + imgH + 12f)
-        captionLayout.draw(canvas)
-        canvas.restore()
+        canvas.withTranslation(x + 6f, y + imgH + 12f) {
+            captionLayout.draw(this)
+        }
     }
 
     private fun drawLargeMediaCardInPdf(
@@ -1066,10 +1058,9 @@ class PdfReportGenerator(
         c.drawRoundRect(RectF(marginX, y, marginX + contentWidth, y + totalH), 6f, 6f, linePaint)
 
         var innerY = y + 8f
-        c.save()
-        c.translate(marginX + 8f, innerY)
-        headerLayout.draw(c)
-        c.restore()
+        c.withTranslation(marginX + 8f, innerY) {
+            headerLayout.draw(this)
+        }
         innerY += headerLayout.height + 4f
 
         val bitmap = loadMediaBitmapForPdf(media, useAnnotated, 1600)
@@ -1082,10 +1073,9 @@ class PdfReportGenerator(
         }
         innerY += imgH + 6f
 
-        c.save()
-        c.translate(marginX + 8f, innerY)
-        metaLayout.draw(c)
-        c.restore()
+        c.withTranslation(marginX + 8f, innerY) {
+            metaLayout.draw(this)
+        }
 
         setCurY(y + totalH + 10f)
     }

@@ -7,6 +7,8 @@ on:
 jobs:
   build-debug-apk:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout repository
@@ -37,9 +39,22 @@ jobs:
       - name: Build Debug APK
         run: gradle assembleDebug --no-daemon
 
+      - name: Copy APK with app name
+        run: cp app/build/outputs/apk/debug/app-debug.apk Vedicra-Vastu-Solutions.apk
+
       - name: Upload Downloadable APK
         uses: actions/upload-artifact@v4
         with:
           name: Vedicra-Vastu-Solutions-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: Vedicra-Vastu-Solutions.apk
           if-no-files-found: error
+
+      - name: Publish Direct APK to GitHub Releases
+        if: github.ref_type == 'branch'
+        continue-on-error: true
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest-apk
+          name: Vedicra Vastu APK (Latest)
+          body: Direct installable APK built automatically from the latest code.
+          files: Vedicra-Vastu-Solutions.apk

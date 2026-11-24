@@ -8,12 +8,16 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
 import android.graphics.Typeface
+import androidx.core.graphics.createBitmap
+import androidx.core.graphics.withRotation
+import androidx.core.graphics.withSave
 import com.example.model.AnnotationType
 import com.example.model.GridOverlayStyle
 import com.example.model.LayoutAnnotation
 import com.example.model.VastuChakraSpec
 import com.example.model.VastuCompassMath
 import com.example.model.WorkspaceMetadata
+import java.util.Locale
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.min
@@ -25,10 +29,9 @@ object WorkspaceRenderer {
         sourceBitmap: Bitmap,
         metadata: WorkspaceMetadata
     ): Bitmap {
-        val out = Bitmap.createBitmap(
+        val out = createBitmap(
             sourceBitmap.width,
-            sourceBitmap.height,
-            Bitmap.Config.ARGB_8888
+            sourceBitmap.height
         )
         val canvas = Canvas(out)
         canvas.drawBitmap(sourceBitmap, 0f, 0f, null)
@@ -72,7 +75,7 @@ object WorkspaceRenderer {
         val normTilt = VastuCompassMath.normalizeDegrees(gridRotationDeg)
         val topZone = VastuCompassMath.zoneForDegree(topFacingDeg)
         val topPada = VastuCompassMath.padaForDegree(topFacingDeg)
-        val label = "North Tilt: ${String.format("%.1f", normTilt)}°  •  Top Faces ${String.format("%.1f", topFacingDeg)}° ${topZone.code} (${topPada.code})"
+        val label = "North Tilt: ${String.format(Locale.US, "%.1f", normTilt)}°  •  Top Faces ${String.format(Locale.US, "%.1f", topFacingDeg)}° ${topZone.code} (${topPada.code})"
 
         val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.WHITE
@@ -141,74 +144,70 @@ object WorkspaceRenderer {
         val strokeMain = (radius * 0.006f).coerceIn(1.5f, 4f)
         val strokeThin = (radius * 0.003f).coerceIn(1.0f, 2.2f)
 
-        canvas.save()
-        canvas.rotate(rotationDeg, cx, cy)
+        canvas.withRotation(rotationDeg, cx, cy) {
+            // Subtle circular scrim
+            fillPaint.color = Color.argb(68, 255, 255, 255)
+            drawCircle(cx, cy, rTickOuter, fillPaint)
 
-        // Subtle circular scrim
-        fillPaint.color = Color.argb(68, 255, 255, 255)
-        canvas.drawCircle(cx, cy, rTickOuter, fillPaint)
+            // 1. 16 Zones (Attribute outer band + element-colored zone code band)
+            VastuChakraSpec.zones16.forEach { zone ->
+                val startAngle = zone.centerDegree - 11.25f - 90f
+                val sweepAngle = 22.5f
 
-        // 1. 16 Zones (Attribute outer band + element-colored zone code band)
-        VastuChakraSpec.zones16.forEach { zone ->
-            val startAngle = zone.centerDegree - 11.25f - 90f
-            val sweepAngle = 22.5f
+                drawAndroidRingSector(
+                    canvas = this, cx = cx, cy = cy,
+                    innerRadius = rAttrInner, outerRadius = rAttrOuter,
+                    startAngleDeg = startAngle, sweepAngleDeg = sweepAngle,
+                    fillColor = Color.argb(175, 248, 244, 234),
+                    borderColor = Color.argb(200, 40, 52, 46),
+                    borderWidth = strokeThin,
+                    fillPaint = fillPaint, strokePaint = strokePaint
+                )
 
-            drawAndroidRingSector(
-                canvas = canvas, cx = cx, cy = cy,
-                innerRadius = rAttrInner, outerRadius = rAttrOuter,
-                startAngleDeg = startAngle, sweepAngleDeg = sweepAngle,
-                fillColor = Color.argb(175, 248, 244, 234),
-                borderColor = Color.argb(200, 40, 52, 46),
-                borderWidth = strokeThin,
-                fillPaint = fillPaint, strokePaint = strokePaint
-            )
+                val zc = zone.sectorColorArgb.toInt()
+                val zoneAlphaColor = Color.argb(175, Color.red(zc), Color.green(zc), Color.blue(zc))
+                drawAndroidRingSector(
+                    canvas = this, cx = cx, cy = cy,
+                    innerRadius = rZoneInner, outerRadius = rZoneOuter,
+                    startAngleDeg = startAngle, sweepAngleDeg = sweepAngle,
+                    fillColor = zoneAlphaColor,
+                    borderColor = Color.argb(220, 31, 42, 36),
+                    borderWidth = strokeThin,
+                    fillPaint = fillPaint, strokePaint = strokePaint
+                )
 
-            val zc = zone.sectorColorArgb.toInt()
-            val zoneAlphaColor = Color.argb(175, Color.red(zc), Color.green(zc), Color.blue(zc))
-            drawAndroidRingSector(
-                canvas = canvas, cx = cx, cy = cy,
-                innerRadius = rZoneInner, outerRadius = rZoneOuter,
-                startAngleDeg = startAngle, sweepAngleDeg = sweepAngle,
-                fillColor = zoneAlphaColor,
-                borderColor = Color.argb(220, 31, 42, 36),
-                borderWidth = strokeThin,
-                fillPaint = fillPaint, strokePaint = strokePaint
-            )
+                // Attribute text (2 lines)
+                val attrMidR = (rAttrInner + rAttrOuter) / 2f
+                val rad = Math.toRadians(zone.centerDegree.toDouble() - 90.0)
+                val ax = cx + (attrMidR * cos(rad)).toFloat()
+                val ay = cy + (attrMidR * sin(rad)).toFloat()
+                val attrLines = zone.attributeTitle.split(" / ")
+                textPaint.color = Color.rgb(26, 34, 30)
+                textPaint.textSize = (radius * 0.033f).coerceAtLeast(10f)
+                textPaint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                val textRot = if (zone.centerDegree > 100f && zone.centerDegree < 260f) zone.centerDegree + 180f else zone.centerDegree
+                withRotation(textRot, ax, ay) {
+                    if (attrLines.size == 2) {
+                        val lh = textPaint.textSize * 1.08f
+                        drawText(attrLines[0], ax, ay - lh * 0.2f, textPaint)
+                        drawText(attrLines[1], ax, ay + lh * 0.78f, textPaint)
+                    } else {
+                        val yOff = -(textPaint.descent() + textPaint.ascent()) / 2f
+                        drawText(zone.attributeTitle, ax, ay + yOff, textPaint)
+                    }
+                }
 
-            // Attribute text (2 lines)
-            val attrMidR = (rAttrInner + rAttrOuter) / 2f
-            val rad = Math.toRadians(zone.centerDegree.toDouble() - 90.0)
-            val ax = cx + (attrMidR * cos(rad)).toFloat()
-            val ay = cy + (attrMidR * sin(rad)).toFloat()
-            val attrLines = zone.attributeTitle.split(" / ")
-            textPaint.color = Color.rgb(26, 34, 30)
-            textPaint.textSize = (radius * 0.033f).coerceAtLeast(10f)
-            textPaint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-            val textRot = if (zone.centerDegree > 100f && zone.centerDegree < 260f) zone.centerDegree + 180f else zone.centerDegree
-            canvas.save()
-            canvas.rotate(textRot, ax, ay)
-            if (attrLines.size == 2) {
-                val lh = textPaint.textSize * 1.08f
-                canvas.drawText(attrLines[0], ax, ay - lh * 0.2f, textPaint)
-                canvas.drawText(attrLines[1], ax, ay + lh * 0.78f, textPaint)
-            } else {
-                val yOff = -(textPaint.descent() + textPaint.ascent()) / 2f
-                canvas.drawText(zone.attributeTitle, ax, ay + yOff, textPaint)
+                // Zone code text
+                val zMidR = (rZoneInner + rZoneOuter) / 2f
+                val zx = cx + (zMidR * cos(rad)).toFloat()
+                val zy = cy + (zMidR * sin(rad)).toFloat()
+                textPaint.color = zone.sectorTextColorArgb.toInt()
+                textPaint.textSize = (radius * 0.047f).coerceAtLeast(13f)
+                withRotation(textRot, zx, zy) {
+                    val yOff = -(textPaint.descent() + textPaint.ascent()) / 2f
+                    drawText(zone.code, zx, zy + yOff, textPaint)
+                }
             }
-            canvas.restore()
-
-            // Zone code text
-            val zMidR = (rZoneInner + rZoneOuter) / 2f
-            val zx = cx + (zMidR * cos(rad)).toFloat()
-            val zy = cy + (zMidR * sin(rad)).toFloat()
-            textPaint.color = zone.sectorTextColorArgb.toInt()
-            textPaint.textSize = (radius * 0.047f).coerceAtLeast(13f)
-            canvas.save()
-            canvas.rotate(textRot, zx, zy)
-            val yOff = -(textPaint.descent() + textPaint.ascent()) / 2f
-            canvas.drawText(zone.code, zx, zy + yOff, textPaint)
-            canvas.restore()
-        }
 
         // 2. 32 Padas Ring (0° strictly between N4 and N5)
         VastuChakraSpec.padas32.forEach { pada ->
@@ -260,11 +259,10 @@ object WorkspaceRenderer {
             textPaint.color = if (pada.isAuspicious) Color.WHITE else Color.rgb(31, 36, 33)
             textPaint.textSize = (radius * 0.041f).coerceAtLeast(11f)
             val textRot = if (pada.midDegree > 100f && pada.midDegree < 260f) pada.midDegree + 180f else pada.midDegree
-            canvas.save()
-            canvas.rotate(textRot, px, py)
-            val yOff = -(textPaint.descent() + textPaint.ascent()) / 2f
-            canvas.drawText(pada.code, px, py + yOff, textPaint)
-            canvas.restore()
+            withRotation(textRot, px, py) {
+                val yOff = -(textPaint.descent() + textPaint.ascent()) / 2f
+                drawText(pada.code, px, py + yOff, textPaint)
+            }
 
             // Radial Deity Name + ✓/✗ inside spoke
             val deityR = (rDeityOuter + rBrahma * 1.45f) / 2f
@@ -274,11 +272,10 @@ object WorkspaceRenderer {
             textPaint.textSize = (radius * 0.031f).coerceAtLeast(9f)
             val mark = if (pada.isAuspicious) "✓" else "✗"
             val radialRot = if (pada.midDegree in 0f..180f) pada.midDegree - 90f else pada.midDegree + 90f
-            canvas.save()
-            canvas.rotate(radialRot, dx, dy)
-            val dyOff = -(textPaint.descent() + textPaint.ascent()) / 2f
-            canvas.drawText("${pada.deity} $mark", dx, dy + dyOff, textPaint)
-            canvas.restore()
+            withRotation(radialRot, dx, dy) {
+                val dyOff = -(textPaint.descent() + textPaint.ascent()) / 2f
+                drawText("${pada.deity} $mark", dx, dy + dyOff, textPaint)
+            }
         }
 
         // 3. 360° Degree Ticks + 10° Numeric Ring
@@ -322,25 +319,23 @@ object WorkspaceRenderer {
                 textPaint.color = if (deg == 0) Color.rgb(211, 47, 47) else Color.rgb(26, 34, 30)
                 textPaint.textSize = (radius * 0.048f).coerceAtLeast(11f)
                 val labelText = if (deg == 0) "0°" else "$deg"
-                canvas.save()
-                canvas.rotate(deg.toFloat(), tx, ty)
-                val yOff = -(textPaint.descent() + textPaint.ascent()) / 2f
-                canvas.drawText(labelText, tx, ty + yOff, textPaint)
-                canvas.restore()
+                withRotation(deg.toFloat(), tx, ty) {
+                    val yOff = -(textPaint.descent() + textPaint.ascent()) / 2f
+                    drawText(labelText, tx, ty + yOff, textPaint)
+                }
             }
         }
 
         // 4. Brahmasthan Center Ring
         fillPaint.color = Color.argb(225, 250, 246, 238)
-        canvas.drawCircle(cx, cy, rBrahma, fillPaint)
+        drawCircle(cx, cy, rBrahma, fillPaint)
         strokePaint.color = Color.rgb(181, 137, 46)
         strokePaint.strokeWidth = strokeMain
-        canvas.drawCircle(cx, cy, rBrahma, strokePaint)
+        drawCircle(cx, cy, rBrahma, strokePaint)
         strokePaint.color = Color.argb(175, 27, 77, 62)
         strokePaint.strokeWidth = strokeThin
-        canvas.drawCircle(cx, cy, rBrahma * 0.55f, strokePaint)
-
-        canvas.restore()
+        drawCircle(cx, cy, rBrahma * 0.55f, strokePaint)
+        }
     }
 
     private fun drawAndroidRingSector(
@@ -419,47 +414,44 @@ object WorkspaceRenderer {
             style = Paint.Style.FILL
         }
 
-        canvas.save()
-        canvas.rotate(rotationDeg, cx, cy)
+        canvas.withRotation(rotationDeg, cx, cy) {
+            // 3x3 Vastu grid box around center
+            val gridHalf = radius * 0.85f
+            val left = cx - gridHalf
+            val top = cy - gridHalf
+            val right = cx + gridHalf
+            val bottom = cy + gridHalf
+            drawRect(left, top, right, bottom, boxPaint)
+            for (i in 1..2) {
+                val gx = left + (gridHalf * 2f * i / 3f)
+                val gy = top + (gridHalf * 2f * i / 3f)
+                drawLine(gx, top, gx, bottom, boxPaint)
+                drawLine(left, gy, right, gy, boxPaint)
+            }
 
-        // 3x3 Vastu grid box around center
-        val gridHalf = radius * 0.85f
-        val left = cx - gridHalf
-        val top = cy - gridHalf
-        val right = cx + gridHalf
-        val bottom = cy + gridHalf
-        canvas.drawRect(left, top, right, bottom, boxPaint)
-        for (i in 1..2) {
-            val gx = left + (gridHalf * 2f * i / 3f)
-            val gy = top + (gridHalf * 2f * i / 3f)
-            canvas.drawLine(gx, top, gx, bottom, boxPaint)
-            canvas.drawLine(left, gy, right, gy, boxPaint)
+            // Outer compass ring & 16-zone radial spokes
+            drawCircle(cx, cy, radius, circlePaint)
+            drawCircle(cx, cy, radius * 0.33f, dashedPaint)
+
+            for (i in 0 until 16) {
+                val angleRad = Math.toRadians((i * 22.5 - 90.0))
+                val ex = cx + (radius * cos(angleRad)).toFloat()
+                val ey = cy + (radius * sin(angleRad)).toFloat()
+                drawLine(cx, cy, ex, ey, if (i % 2 == 0) circlePaint else dashedPaint)
+            }
+
+            val dirs = listOf("N", "NE", "E", "SE", "S", "SW", "W", "NW")
+            dirs.forEachIndexed { idx, label ->
+                val angleRad = Math.toRadians((idx * 45.0 - 90.0))
+                val lx = cx + ((radius + baseUnit * 1.4f) * cos(angleRad)).toFloat()
+                val ly = cy + ((radius + baseUnit * 1.4f) * sin(angleRad)).toFloat()
+                val pillR = baseUnit * 1.15f
+                drawCircle(lx, ly, pillR, dirBgPaint)
+                drawCircle(lx, ly, pillR, circlePaint)
+                val yOffset = -(dirLabelPaint.descent() + dirLabelPaint.ascent()) / 2f
+                drawText(label, lx, ly + yOffset, dirLabelPaint)
+            }
         }
-
-        // Outer compass ring & 16-zone radial spokes
-        canvas.drawCircle(cx, cy, radius, circlePaint)
-        canvas.drawCircle(cx, cy, radius * 0.33f, dashedPaint)
-
-        for (i in 0 until 16) {
-            val angleRad = Math.toRadians((i * 22.5 - 90.0))
-            val ex = cx + (radius * cos(angleRad)).toFloat()
-            val ey = cy + (radius * sin(angleRad)).toFloat()
-            canvas.drawLine(cx, cy, ex, ey, if (i % 2 == 0) circlePaint else dashedPaint)
-        }
-
-        val dirs = listOf("N", "NE", "E", "SE", "S", "SW", "W", "NW")
-        dirs.forEachIndexed { idx, label ->
-            val angleRad = Math.toRadians((idx * 45.0 - 90.0))
-            val lx = cx + ((radius + baseUnit * 1.4f) * cos(angleRad)).toFloat()
-            val ly = cy + ((radius + baseUnit * 1.4f) * sin(angleRad)).toFloat()
-            val pillR = baseUnit * 1.15f
-            canvas.drawCircle(lx, ly, pillR, dirBgPaint)
-            canvas.drawCircle(lx, ly, pillR, circlePaint)
-            val yOffset = -(dirLabelPaint.descent() + dirLabelPaint.ascent()) / 2f
-            canvas.drawText(label, lx, ly + yOffset, dirLabelPaint)
-        }
-
-        canvas.restore()
     }
 
     private fun drawAnnotation(
@@ -506,26 +498,26 @@ object WorkspaceRenderer {
             }
 
             AnnotationType.NORTH_ARROW -> {
-                canvas.save()
-                canvas.translate(px, py)
-                canvas.rotate(ann.rotationDegrees)
-                val r = baseUnit * 2.1f * ann.scale
-                val path = Path().apply {
-                    moveTo(0f, -r)
-                    lineTo(r * 0.55f, r * 0.7f)
-                    lineTo(0f, r * 0.35f)
-                    lineTo(-r * 0.55f, r * 0.7f)
-                    close()
+                canvas.withSave {
+                    translate(px, py)
+                    rotate(ann.rotationDegrees)
+                    val r = baseUnit * 2.1f * ann.scale
+                    val path = Path().apply {
+                        moveTo(0f, -r)
+                        lineTo(r * 0.55f, r * 0.7f)
+                        lineTo(0f, r * 0.35f)
+                        lineTo(-r * 0.55f, r * 0.7f)
+                        close()
+                    }
+                    drawPath(path, bgPaint)
+                    drawPath(path, borderPaint)
+                    val nPaint = Paint(textPaint).apply {
+                        textSize = (baseUnit * 0.95f * ann.scale).coerceAtLeast(16f)
+                    }
+                    drawText("N", 0f, -r - baseUnit * 0.35f, nPaint.apply {
+                        color = accentColor
+                    })
                 }
-                canvas.drawPath(path, bgPaint)
-                canvas.drawPath(path, borderPaint)
-                val nPaint = Paint(textPaint).apply {
-                    textSize = (baseUnit * 0.95f * ann.scale).coerceAtLeast(16f)
-                }
-                canvas.drawText("N", 0f, -r - baseUnit * 0.35f, nPaint.apply {
-                    color = accentColor
-                })
-                canvas.restore()
             }
 
             AnnotationType.ROOM_LABEL,
