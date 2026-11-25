@@ -169,4 +169,44 @@ class VastuNewFeaturesUnitTest {
         assertEquals(1, decodedPlan?.wallLines?.size)
         assertFalse(roundTripped.showGridOverlay.not())
     }
+
+    @Test
+    fun mapPlaceSearchParsers_handleCoordinatesPhotonAndNominatim() {
+        val coord = com.example.ui.screens.parseCoordinateSearchQuery("17.3850, 78.4867")
+        assertNotNull(coord)
+        assertEquals(17.3850, coord!!.latitude, 0.0001)
+        assertEquals(78.4867, coord.longitude, 0.0001)
+        assertNull(com.example.ui.screens.parseCoordinateSearchQuery("Hyderabad Telangana"))
+        assertNull(com.example.ui.screens.parseCoordinateSearchQuery("999.0, 78.0"))
+
+        val photonJson = """
+            {
+              "features": [
+                {
+                  "geometry": { "coordinates": [78.4867, 17.3850] },
+                  "properties": { "name": "Hyderabad", "state": "Telangana", "country": "India" }
+                }
+              ]
+            }
+        """.trimIndent()
+        val photonHits = com.example.ui.screens.parsePhotonSearchJson(photonJson)
+        assertEquals(1, photonHits.size)
+        assertEquals("Hyderabad", photonHits.first().title)
+        assertTrue(photonHits.first().subtitle.contains("Telangana"))
+        assertEquals(17.3850, photonHits.first().latitude, 0.0001)
+
+        val nominatimJson = """
+            [
+              {
+                "lat": "28.6139",
+                "lon": "77.2090",
+                "display_name": "New Delhi, Delhi, India"
+              }
+            ]
+        """.trimIndent()
+        val nominatimHits = com.example.ui.screens.parseNominatimSearchJson(nominatimJson)
+        assertEquals(1, nominatimHits.size)
+        assertEquals("New Delhi", nominatimHits.first().title)
+        assertEquals(28.6139, nominatimHits.first().latitude, 0.0001)
+    }
 }

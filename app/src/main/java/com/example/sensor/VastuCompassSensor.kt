@@ -99,7 +99,7 @@ fun rememberVastuCompassState(enabled: Boolean = true): State<CompassReading> {
                     val activity = context.findActivity()
                     return runCatching {
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                            (activity ?: context).display?.rotation ?: Surface.ROTATION_0
+                            (activity ?: context).display.rotation
                         } else {
                             @Suppress("DEPRECATION")
                             val wm = context.getSystemService(Context.WINDOW_SERVICE) as? WindowManager

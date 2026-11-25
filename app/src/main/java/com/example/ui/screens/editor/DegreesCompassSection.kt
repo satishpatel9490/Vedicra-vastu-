@@ -243,7 +243,7 @@ fun DegreesAndCompassSection(
             ) {
                 Icon(Icons.Filled.Map, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
-                Text("Open Satellite Map & GPS Alignment")
+                Text("Open Google Maps & GPS Alignment")
             }
 
             // Quick Capture Actions to Note Degrees Directly Into the Report

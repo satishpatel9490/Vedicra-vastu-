@@ -288,7 +288,8 @@ fun DrawScope.drawChakraByTypeCompose(
     showDeityNames: Boolean = true,
     showTopLubberNeedle: Boolean = false,
     tiltRollDeg: Float = 0f,
-    tiltPitchDeg: Float = 0f
+    tiltPitchDeg: Float = 0f,
+    darkContrastMode: Boolean = false
 ) {
     when (chakraType) {
         VastuChakraType.SHAKTI_16_32 -> drawVastuChakraCompose(
@@ -298,25 +299,29 @@ fun DrawScope.drawChakraByTypeCompose(
             showDeityNames = showDeityNames,
             showTopLubberNeedle = showTopLubberNeedle,
             tiltRollDeg = tiltRollDeg,
-            tiltPitchDeg = tiltPitchDeg
+            tiltPitchDeg = tiltPitchDeg,
+            darkContrastMode = darkContrastMode
         )
         VastuChakraType.DEVTA_45_MANDALA -> drawDevta45MandalaCompose(
             rotationDegrees = rotationDegrees,
             textMeasurer = textMeasurer,
             transparentFill = transparentFill,
-            showTopLubberNeedle = showTopLubberNeedle
+            showTopLubberNeedle = showTopLubberNeedle,
+            darkContrastMode = darkContrastMode
         )
         VastuChakraType.PANCH_TATVA_CYCLE -> drawPanchTatvaCycleCompose(
             rotationDegrees = rotationDegrees,
             textMeasurer = textMeasurer,
             transparentFill = transparentFill,
-            showTopLubberNeedle = showTopLubberNeedle
+            showTopLubberNeedle = showTopLubberNeedle,
+            darkContrastMode = darkContrastMode
         )
         VastuChakraType.MAIN_DOOR_32 -> drawMainDoor32ChakraCompose(
             rotationDegrees = rotationDegrees,
             textMeasurer = textMeasurer,
             transparentFill = transparentFill,
-            showTopLubberNeedle = showTopLubberNeedle
+            showTopLubberNeedle = showTopLubberNeedle,
+            darkContrastMode = darkContrastMode
         )
     }
 }
@@ -330,7 +335,8 @@ fun DrawScope.drawDevta45MandalaCompose(
     rotationDegrees: Float,
     textMeasurer: TextMeasurer,
     transparentFill: Boolean,
-    showTopLubberNeedle: Boolean
+    showTopLubberNeedle: Boolean,
+    darkContrastMode: Boolean = false
 ) {
     val cx = size.width / 2f
     val cy = size.height / 2f
@@ -358,7 +364,11 @@ fun DrawScope.drawDevta45MandalaCompose(
 
     rotate(degrees = rotationDegrees, pivot = Offset(cx, cy)) {
         drawCircle(
-            color = if (transparentFill) Color(0x38FFFFFF) else Color(0xFFFDFBF6),
+            color = when {
+                darkContrastMode -> Color(0x9E0E1512)
+                transparentFill -> Color(0x38FFFFFF)
+                else -> Color(0xFFFDFBF6)
+            },
             radius = rTickOuter,
             center = Offset(cx, cy)
         )
@@ -519,7 +529,7 @@ fun DrawScope.drawDevta45MandalaCompose(
         drawText(brahmaRes, topLeft = Offset(cx - brahmaRes.size.width / 2f, cy - brahmaRes.size.height / 2f))
 
         // 6. Outer 360° Degree Ticks
-        drawOuter360Scale(cx, cy, rTickOuter, rZoneOuter, rDegMid, radius, strokeMain, strokeThin, textMeasurer)
+        drawOuter360Scale(cx, cy, rTickOuter, rZoneOuter, rDegMid, radius, strokeMain, strokeThin, darkContrastMode, textMeasurer)
     }
 
     if (showTopLubberNeedle) {
@@ -534,7 +544,8 @@ fun DrawScope.drawPanchTatvaCycleCompose(
     rotationDegrees: Float,
     textMeasurer: TextMeasurer,
     transparentFill: Boolean,
-    showTopLubberNeedle: Boolean
+    showTopLubberNeedle: Boolean,
+    darkContrastMode: Boolean = false
 ) {
     val cx = size.width / 2f
     val cy = size.height / 2f
@@ -556,7 +567,11 @@ fun DrawScope.drawPanchTatvaCycleCompose(
 
     rotate(degrees = rotationDegrees, pivot = Offset(cx, cy)) {
         drawCircle(
-            color = if (transparentFill) Color(0x38FFFFFF) else Color(0xFFFAF9F5),
+            color = when {
+                darkContrastMode -> Color(0x9E0E1512)
+                transparentFill -> Color(0x38FFFFFF)
+                else -> Color(0xFFFAF9F5)
+            },
             radius = rOuterAttr,
             center = Offset(cx, cy)
         )
@@ -700,7 +715,8 @@ fun DrawScope.drawMainDoor32ChakraCompose(
     rotationDegrees: Float,
     textMeasurer: TextMeasurer,
     transparentFill: Boolean,
-    showTopLubberNeedle: Boolean
+    showTopLubberNeedle: Boolean,
+    darkContrastMode: Boolean = false
 ) {
     val cx = size.width / 2f
     val cy = size.height / 2f
@@ -719,7 +735,11 @@ fun DrawScope.drawMainDoor32ChakraCompose(
 
     rotate(degrees = rotationDegrees, pivot = Offset(cx, cy)) {
         drawCircle(
-            color = if (transparentFill) Color(0x36FFFFFF) else Color(0xFFFFFFFF),
+            color = when {
+                darkContrastMode -> Color(0x9E0E1512)
+                transparentFill -> Color(0x36FFFFFF)
+                else -> Color(0xFFFFFFFF)
+            },
             radius = rColorBandOuter,
             center = Offset(cx, cy)
         )
@@ -875,9 +895,13 @@ private fun DrawScope.drawOuter360Scale(
     chakraRadius: Float,
     strokeMain: Float,
     strokeThin: Float,
+    darkContrastMode: Boolean = false,
     textMeasurer: TextMeasurer
 ) {
-    drawCircle(color = Color(0xFF1B4D3E), radius = rTickOuter, center = Offset(cx, cy), style = Stroke(strokeMain))
+    val rimColor = if (darkContrastMode) Color(0xFFE6C574) else Color(0xFF1B4D3E)
+    val tickBaseColor = if (darkContrastMode) Color(0xFFF3F6F4) else Color(0xFF263238)
+    val labelBaseColor = if (darkContrastMode) Color(0xFFF3F6F4) else Color(0xFF1A221E)
+    drawCircle(color = rimColor, radius = rTickOuter, center = Offset(cx, cy), style = Stroke(strokeMain))
     for (deg in 0 until 360 step 2) {
         val angleRad = Math.toRadians(deg.toDouble() - 90.0)
         val len = when {
@@ -885,7 +909,7 @@ private fun DrawScope.drawOuter360Scale(
             else -> (rTickOuter - rTickInner) * 0.36f
         }
         drawLine(
-            color = if (deg == 0) Color(0xFFD32F2F) else Color(0xFF263238),
+            color = if (deg == 0) Color(0xFFFF5252) else tickBaseColor,
             start = Offset(cx + (rTickOuter - len) * cos(angleRad).toFloat(), cy + (rTickOuter - len) * sin(angleRad).toFloat()),
             end = Offset(cx + rTickOuter * cos(angleRad).toFloat(), cy + rTickOuter * sin(angleRad).toFloat()),
             strokeWidth = if (deg % 10 == 0) strokeThin * 1.3f else strokeThin * 0.7f
@@ -896,7 +920,7 @@ private fun DrawScope.drawOuter360Scale(
             val res = textMeasurer.measure(
                 text = if (deg == 0) "0°" else "$deg",
                 style = TextStyle(
-                    color = if (deg == 0) Color(0xFFD32F2F) else Color(0xFF1A221E),
+                    color = if (deg == 0) Color(0xFFFF5252) else labelBaseColor,
                     fontSize = (chakraRadius * 0.036f).coerceIn(5.5f, 9.5f).sp,
                     fontWeight = FontWeight.Bold
                 )

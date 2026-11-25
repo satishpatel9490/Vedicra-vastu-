@@ -35,6 +35,7 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
@@ -238,10 +239,16 @@ fun VastuChakraCanvas(
     showDeityNames: Boolean = true,
     showTopLubberNeedle: Boolean = false,
     tiltRollDeg: Float = 0f,
-    tiltPitchDeg: Float = 0f
+    tiltPitchDeg: Float = 0f,
+    chakraOpacity: Float = 1f,
+    darkContrastMode: Boolean = false
 ) {
     val textMeasurer = rememberTextMeasurer()
-    Canvas(modifier = modifier) {
+    Canvas(
+        modifier = modifier.graphicsLayer {
+            alpha = chakraOpacity.coerceIn(0.10f, 1.0f)
+        }
+    ) {
         drawChakraByTypeCompose(
             chakraType = chakraType,
             rotationDegrees = rotationDegrees,
@@ -250,7 +257,8 @@ fun VastuChakraCanvas(
             showDeityNames = showDeityNames,
             showTopLubberNeedle = showTopLubberNeedle,
             tiltRollDeg = tiltRollDeg,
-            tiltPitchDeg = tiltPitchDeg
+            tiltPitchDeg = tiltPitchDeg,
+            darkContrastMode = darkContrastMode
         )
     }
 }
@@ -374,7 +382,8 @@ fun DrawScope.drawVastuChakraCompose(
     showDeityNames: Boolean = true,
     showTopLubberNeedle: Boolean = false,
     tiltRollDeg: Float = 0f,
-    tiltPitchDeg: Float = 0f
+    tiltPitchDeg: Float = 0f,
+    darkContrastMode: Boolean = false
 ) {
     val cx = size.width / 2f
     val cy = size.height / 2f
@@ -393,15 +402,26 @@ fun DrawScope.drawVastuChakraCompose(
     val rDeityOuter = radius * 0.445f
     val rBrahma = radius * 0.135f
 
-    val sectorAlpha = if (transparentFill) 0.54f else 0.92f
-    val cardAlpha = if (transparentFill) 0.62f else 0.95f
+    val sectorAlpha = if (transparentFill) 0.58f else 0.92f
+    val cardAlpha = if (transparentFill) 0.66f else 0.95f
     val strokeMain = (radius * 0.006f).coerceIn(1.2f, 3f)
     val strokeThin = (radius * 0.003f).coerceIn(0.8f, 1.8f)
+
+    val backingCircleColor = when {
+        darkContrastMode -> Color(0x9E0E1512)
+        transparentFill -> Color(0x36FFFFFF)
+        else -> Color(0xFFFDFBF6)
+    }
+    val attrCardColor = if (darkContrastMode) Color(0xFF1A2420) else Color(0xFFF8F4EA)
+    val ringBorder = if (darkContrastMode) Color(0xFFE6C574).copy(alpha = 0.80f) else Color(0xFF28342E).copy(alpha = 0.78f)
+    val outerRimColor = if (darkContrastMode) Color(0xFFE6C574) else Color(0xFF1B4D3E)
+    val degreeTickBaseColor = if (darkContrastMode) Color(0xFFF3F6F4) else Color(0xFF1F2421)
+    val degreeMajorColor = if (darkContrastMode) Color(0xFFFFD54F) else Color(0xFF1B4D3E)
 
     rotate(degrees = rotationDegrees, pivot = Offset(cx, cy)) {
         // Subtle backing circle for legibility over dark camera or busy drawings
         drawCircle(
-            color = if (transparentFill) Color(0x36FFFFFF) else Color(0xFFFDFBF6),
+            color = backingCircleColor,
             radius = rTickOuter,
             center = Offset(cx, cy)
         )
@@ -412,7 +432,7 @@ fun DrawScope.drawVastuChakraCompose(
             val startAngle = zone.centerDegree - 11.25f - 90f
             val sweepAngle = 22.5f
 
-            // Outer attribute cell (ivory/translucent card)
+            // Outer attribute cell (ivory or dark charcoal translucent card)
             drawRingSector(
                 cx = cx,
                 cy = cy,
@@ -420,8 +440,8 @@ fun DrawScope.drawVastuChakraCompose(
                 outerRadius = rAttrOuter,
                 startAngleDeg = startAngle,
                 sweepAngleDeg = sweepAngle,
-                fillColor = Color(0xFFF8F4EA).copy(alpha = cardAlpha),
-                borderColor = Color(0xFF28342E).copy(alpha = 0.75f),
+                fillColor = attrCardColor.copy(alpha = cardAlpha),
+                borderColor = ringBorder,
                 borderWidth = strokeThin
             )
 
@@ -434,7 +454,7 @@ fun DrawScope.drawVastuChakraCompose(
                 startAngleDeg = startAngle,
                 sweepAngleDeg = sweepAngle,
                 fillColor = Color(zone.sectorColorArgb).copy(alpha = sectorAlpha),
-                borderColor = Color(0xFF1F2A24).copy(alpha = 0.85f),
+                borderColor = ringBorder,
                 borderWidth = strokeThin
             )
 
@@ -446,6 +466,7 @@ fun DrawScope.drawVastuChakraCompose(
                     cy = cy,
                     midRadius = (rAttrInner + rAttrOuter) / 2f,
                     chakraRadius = radius,
+                    darkContrastMode = darkContrastMode,
                     textMeasurer = textMeasurer
                 )
             }
@@ -458,6 +479,7 @@ fun DrawScope.drawVastuChakraCompose(
                 midRadius = (rZoneInner + rZoneOuter) / 2f,
                 chakraRadius = radius,
                 transparentFill = transparentFill,
+                darkContrastMode = darkContrastMode,
                 textMeasurer = textMeasurer
             )
         }
@@ -468,9 +490,11 @@ fun DrawScope.drawVastuChakraCompose(
             val sweepAngle = VastuChakraSpec.PADA_SPAN_DEGREES
 
             val padaFill = if (pada.isAuspicious) {
-                Color(0xFF4CAF50).copy(alpha = if (transparentFill) 0.74f else 0.90f)
+                Color(0xFF4CAF50).copy(alpha = if (transparentFill) 0.76f else 0.90f)
             } else {
-                Color(0xFFF7F5EE).copy(alpha = if (transparentFill) 0.58f else 0.92f)
+                (if (darkContrastMode) Color(0xFF212D28) else Color(0xFFF7F5EE)).copy(
+                    alpha = if (transparentFill) 0.68f else 0.92f
+                )
             }
             drawRingSector(
                 cx = cx,
@@ -480,7 +504,7 @@ fun DrawScope.drawVastuChakraCompose(
                 startAngleDeg = startAngle,
                 sweepAngleDeg = sweepAngle,
                 fillColor = padaFill,
-                borderColor = Color(0xFF1F2A24).copy(alpha = 0.85f),
+                borderColor = ringBorder,
                 borderWidth = strokeThin
             )
 
@@ -490,9 +514,9 @@ fun DrawScope.drawVastuChakraCompose(
             val isMajorCompassSpoke = pada.index % 4 == 0
             drawLine(
                 color = when {
-                    isCardinalNorthBoundary -> Color(0xFFD32F2F)
-                    isMajorCompassSpoke -> Color(0xFF1B4D3E).copy(alpha = 0.85f)
-                    else -> Color(0xFF37474F).copy(alpha = 0.5f)
+                    isCardinalNorthBoundary -> Color(0xFFFF5252)
+                    isMajorCompassSpoke -> outerRimColor.copy(alpha = 0.85f)
+                    else -> (if (darkContrastMode) Color(0xFFB0BEC5) else Color(0xFF37474F)).copy(alpha = 0.55f)
                 },
                 start = Offset(
                     cx + rBrahma * cos(boundaryRad).toFloat(),
@@ -516,6 +540,7 @@ fun DrawScope.drawVastuChakraCompose(
                 cy = cy,
                 midRadius = (rPadaInner + rPadaOuter) / 2f,
                 chakraRadius = radius,
+                darkContrastMode = darkContrastMode,
                 textMeasurer = textMeasurer
             )
 
@@ -527,7 +552,7 @@ fun DrawScope.drawVastuChakraCompose(
                     cy = cy,
                     radialMid = (rDeityOuter + rBrahma * 1.45f) / 2f,
                     chakraRadius = radius,
-                    transparentFill = transparentFill,
+                    transparentFill = transparentFill || darkContrastMode,
                     textMeasurer = textMeasurer
                 )
             }
@@ -535,13 +560,13 @@ fun DrawScope.drawVastuChakraCompose(
 
         // 3. 360° Degree Tick Scale + 10° Labels
         drawCircle(
-            color = Color(0xFF1B4D3E),
+            color = outerRimColor,
             radius = rTickOuter,
             center = Offset(cx, cy),
             style = Stroke(width = strokeMain)
         )
         drawCircle(
-            color = Color(0xFF1B4D3E).copy(alpha = 0.7f),
+            color = outerRimColor.copy(alpha = 0.7f),
             radius = rAttrOuter,
             center = Offset(cx, cy),
             style = Stroke(width = strokeThin)
@@ -555,10 +580,10 @@ fun DrawScope.drawVastuChakraCompose(
                 else -> rTickOuter - (rTickOuter - rTickInner) * 0.48f
             }
             val tickColor = when {
-                deg == 0 -> Color(0xFFD32F2F)
-                deg % 90 == 0 -> Color(0xFF1B4D3E)
-                deg % 10 == 0 -> Color(0xFF1F2421)
-                else -> Color(0xFF455A64).copy(alpha = 0.78f)
+                deg == 0 -> Color(0xFFFF5252)
+                deg % 90 == 0 -> degreeMajorColor
+                deg % 10 == 0 -> degreeTickBaseColor
+                else -> degreeTickBaseColor.copy(alpha = 0.72f)
             }
             drawLine(
                 color = tickColor,
@@ -580,7 +605,7 @@ fun DrawScope.drawVastuChakraCompose(
                 val res = textMeasurer.measure(
                     text = labelText,
                     style = TextStyle(
-                        color = if (deg == 0) Color(0xFFD32F2F) else Color(0xFF1A221E),
+                        color = if (deg == 0) Color(0xFFFF5252) else degreeTickBaseColor,
                         fontSize = if (deg == 0) (fontSp.value * 0.85f).sp else fontSp,
                         fontWeight = if (deg % 90 == 0) FontWeight.ExtraBold else FontWeight.Bold
                     )
@@ -593,7 +618,7 @@ fun DrawScope.drawVastuChakraCompose(
 
         // 4. Brahmasthan Sacred Center
         drawCircle(
-            color = Color(0xE8FAF6EE),
+            color = if (darkContrastMode) Color(0xE81A2420) else Color(0xE8FAF6EE),
             radius = rBrahma,
             center = Offset(cx, cy)
         )
@@ -604,7 +629,7 @@ fun DrawScope.drawVastuChakraCompose(
             style = Stroke(width = strokeMain)
         )
         drawCircle(
-            color = Color(0xAA1B4D3E),
+            color = outerRimColor.copy(alpha = 0.72f),
             radius = rBrahma * 0.55f,
             center = Offset(cx, cy),
             style = Stroke(width = strokeThin)
@@ -693,6 +718,7 @@ private fun DrawScope.drawZoneAttributeText(
     cy: Float,
     midRadius: Float,
     chakraRadius: Float,
+    darkContrastMode: Boolean = false,
     textMeasurer: TextMeasurer
 ) {
     val angleDeg = zone.centerDegree
@@ -704,7 +730,7 @@ private fun DrawScope.drawZoneAttributeText(
     val res = textMeasurer.measure(
         text = formatted,
         style = TextStyle(
-            color = Color(0xFF1A221E),
+            color = if (darkContrastMode) Color(0xFFF3F6F4) else Color(0xFF1A221E),
             fontSize = fontSp,
             lineHeight = (fontSp.value * 1.05f).sp,
             fontWeight = FontWeight.SemiBold,
@@ -725,6 +751,7 @@ private fun DrawScope.drawZoneCodeText(
     midRadius: Float,
     chakraRadius: Float,
     transparentFill: Boolean,
+    darkContrastMode: Boolean = false,
     textMeasurer: TextMeasurer
 ) {
     val angleDeg = zone.centerDegree
@@ -732,7 +759,9 @@ private fun DrawScope.drawZoneCodeText(
     val tx = cx + (midRadius * cos(rad)).toFloat()
     val ty = cy + (midRadius * sin(rad)).toFloat()
     val fontSp = (chakraRadius * 0.048f).coerceIn(6.5f, 12f).sp
-    val textColor = if (transparentFill && zone.sectorTextColorArgb == 0xFF1F2421) {
+    val textColor = if (darkContrastMode) {
+        Color.White
+    } else if (transparentFill && zone.sectorTextColorArgb == 0xFF1F2421) {
         Color(0xFF131915)
     } else {
         Color(zone.sectorTextColorArgb)
@@ -757,6 +786,7 @@ private fun DrawScope.drawPadaCodeText(
     cy: Float,
     midRadius: Float,
     chakraRadius: Float,
+    darkContrastMode: Boolean = false,
     textMeasurer: TextMeasurer
 ) {
     val angleDeg = pada.midDegree
@@ -767,7 +797,7 @@ private fun DrawScope.drawPadaCodeText(
     val res = textMeasurer.measure(
         text = pada.code,
         style = TextStyle(
-            color = if (pada.isAuspicious) Color.White else Color(0xFF1F2421),
+            color = if (pada.isAuspicious || darkContrastMode) Color.White else Color(0xFF1F2421),
             fontSize = fontSp,
             fontWeight = FontWeight.Bold
         )
