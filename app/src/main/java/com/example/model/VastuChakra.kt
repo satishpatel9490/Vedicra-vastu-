@@ -1,6 +1,5 @@
 package com.example.model
 
-import android.hardware.SensorManager
 import android.view.Surface
 import kotlinx.serialization.Serializable
 import java.util.Locale
@@ -39,11 +38,6 @@ enum class VastuChakraType(
         displayName = "Main Door Chakra (✓/✗)",
         shortName = "Main Door ✓/✗",
         subtitle = "32 Radial Padas • Auspicious ✓ & Inauspicious ✗ Entrances"
-    ),
-    PANCH_TATVA_COMPASS(
-        displayName = "Panch Tatva Compass Dial",
-        shortName = "Tatva Dial",
-        subtitle = "Ether Center • Water, Air, Fire & Earth Gradient Ring"
     )
 }
 
@@ -541,64 +535,154 @@ object VastuCompassMath {
         val effectiveTiltForBadge = if (uprightCameraMode) abs(horizonRollDeg) else tiltFromFlatDeg
         val isLevel = effectiveTiltForBadge <= 3.5f
 
-        val rotationMatrix = FloatArray(9)
-        val inclinationMatrix = FloatArray(9)
-        val success = SensorManager.getRotationMatrix(rotationMatrix, inclinationMatrix, accel, magnet)
-
-        val rawAzimuth = if (success) {
-            val remapped = FloatArray(9)
-            if (uprightCameraMode) {
-                when (displayRotation) {
-                    Surface.ROTATION_90 -> SensorManager.remapCoordinateSystem(
-                        rotationMatrix,
-                        SensorManager.AXIS_Z,
-                        SensorManager.AXIS_MINUS_X,
-                        remapped
-                    )
-                    Surface.ROTATION_270 -> SensorManager.remapCoordinateSystem(
-                        rotationMatrix,
-                        SensorManager.AXIS_MINUS_Z,
-                        SensorManager.AXIS_X,
-                        remapped
-                    )
-                    else -> SensorManager.remapCoordinateSystem(
-                        rotationMatrix,
-                        SensorManager.AXIS_X,
-                        SensorManager.AXIS_Z,
-                        remapped
-                    )
-                }
-            } else {
-                when (displayRotation) {
-                    Surface.ROTATION_90 -> SensorManager.remapCoordinateSystem(
-                        rotationMatrix,
-                        SensorManager.AXIS_Y,
-                        SensorManager.AXIS_MINUS_X,
-                        remapped
-                    )
-                    Surface.ROTATION_180 -> SensorManager.remapCoordinateSystem(
-                        rotationMatrix,
-                        SensorManager.AXIS_MINUS_X,
-                        SensorManager.AXIS_MINUS_Y,
-                        remapped
-                    )
-                    Surface.ROTATION_270 -> SensorManager.remapCoordinateSystem(
-                        rotationMatrix,
-                        SensorManager.AXIS_MINUS_Y,
-                        SensorManager.AXIS_X,
-                        remapped
-                    )
-                    else -> {
-                        System.arraycopy(rotationMatrix, 0, remapped, 0, 9)
-                    }
-                }
-            }
-            val orientation = FloatArray(3)
-            SensorManager.getOrientation(remapped, orientation)
-            normalizeDegrees(Math.toDegrees(orientation[0].toDouble()).toFloat())
+        val rotationMatrix = computeRotationMatrix(accel, magnet)
+        return if (rotationMatrix != null) {
+            computeOrientationFromRotationMatrix(
+                rotationMatrix = rotationMatrix,
+                pitchDeg = pitchDeg,
+                rollDeg = rollDeg,
+                tiltFromFlatDeg = tiltFromFlatDeg,
+                uprightCameraMode = uprightCameraMode,
+                horizonRollDeg = horizonRollDeg,
+                isLevel = isLevel,
+                magnetMicroTesla = magnetMicroTesla,
+                displayRotation = displayRotation,
+                previousAzimuthDeg = previousAzimuthDeg,
+                accuracy = accuracy,
+                hasHardwareSensors = hasHardwareSensors,
+                smoothingAlpha = smoothingAlpha
+            )
         } else {
-            previousAzimuthDeg ?: 0f
+            val fallbackAzimuth = previousAzimuthDeg ?: 0f
+            CompassReading(
+                azimuthDeg = fallbackAzimuth,
+                pitchDeg = pitchDeg,
+                rollDeg = if (uprightCameraMode) horizonRollDeg else rollDeg,
+                tiltFromLevelDeg = tiltFromFlatDeg,
+                isLevel = isLevel,
+                isUprightCameraMode = uprightCameraMode,
+                magneticFieldMicroTesla = magnetMicroTesla,
+                zone = zoneForDegree(fallbackAzimuth),
+                pada = padaForDegree(fallbackAzimuth),
+                accuracy = accuracy,
+                hasHardwareSensors = hasHardwareSensors
+            )
         }
+    }
+
+    /**
+     * Pure-Kotlin equivalent of Android SensorManager.getRotationMatrix(R, null, gravity, geomagnetic).
+     */
+    fun computeRotationMatrix(accel: FloatArray, magnet: FloatArray): FloatArray? {
+        if (accel.size < 3 || magnet.size < 3) return null
+        val ax = accel[0]
+        val ay = accel[1]
+        val az = accel[2]
+        val normSqA = ax * ax + ay * ay + az * az
+        if (normSqA < 0.01f) return null
+
+        val ex = magnet[0]
+        val ey = magnet[1]
+        val ez = magnet[2]
+        var hx = ey * az - ez * ay
+        var hy = ez * ax - ex * az
+        var hz = ex * ay - ey * ax
+        val normH = sqrt(hx * hx + hy * hy + hz * hz)
+        if (normH < 0.1f) return null
+
+        val invH = 1f / normH
+        hx *= invH
+        hy *= invH
+        hz *= invH
+
+        val invA = 1f / sqrt(normSqA)
+        val nax = ax * invA
+        val nay = ay * invA
+        val naz = az * invA
+
+        val mx = nay * hz - naz * hy
+        val my = naz * hx - nax * hz
+        val mz = nax * hy - nay * hx
+
+        return floatArrayOf(
+            hx, hy, hz,
+            mx, my, mz,
+            nax, nay, naz
+        )
+    }
+
+    /**
+     * Pure-Kotlin axis remapping for flat and upright camera compass orientations.
+     * Axis encoding: 1=X, 2=Y, 3=Z, negative = negated axis.
+     */
+    private fun remapMatrixAxes(inR: FloatArray, newXAxis: Int, newYAxis: Int): FloatArray {
+        fun axisSignAndIndex(axis: Int): Pair<Float, Int> =
+            if (axis < 0) -1f to ((-axis) - 1) else 1f to (axis - 1)
+
+        val (sx, ix) = axisSignAndIndex(newXAxis)
+        val (sy, iy) = axisSignAndIndex(newYAxis)
+        val out = FloatArray(9)
+        for (row in 0..2) {
+            val base = row * 3
+            out[base] = sx * inR[base + ix]
+            out[base + 1] = sy * inR[base + iy]
+            // 3rd column is unused for azimuth atan2(R[1], R[4]), keep normalized orthogonality if needed
+            val iz = 3 - ix - iy
+            out[base + 2] = inR[base + iz]
+        }
+        return out
+    }
+
+    /**
+     * Computes CompassReading directly from a 3x3 rotation matrix (e.g. from TYPE_ROTATION_VECTOR
+     * or computeRotationMatrix) with proper flat/upright and display-rotation remapping.
+     */
+    fun computeOrientationFromRotationMatrix(
+        rotationMatrix: FloatArray,
+        pitchDeg: Float? = null,
+        rollDeg: Float? = null,
+        tiltFromFlatDeg: Float? = null,
+        uprightCameraMode: Boolean? = null,
+        horizonRollDeg: Float? = null,
+        isLevel: Boolean? = null,
+        magnetMicroTesla: Float = 0f,
+        displayRotation: Int = Surface.ROTATION_0,
+        previousAzimuthDeg: Float? = null,
+        accuracy: CompassAccuracy = CompassAccuracy.HIGH,
+        hasHardwareSensors: Boolean = true,
+        smoothingAlpha: Float = 0.25f
+    ): CompassReading {
+        // Gravity vector in device coordinates corresponds to 3rd row of R (elements [6], [7], [8])
+        val gx = rotationMatrix[6].coerceIn(-1f, 1f)
+        val gy = rotationMatrix[7].coerceIn(-1f, 1f)
+        val gz = rotationMatrix[8].coerceIn(-1f, 1f)
+
+        val calcPitch = pitchDeg ?: Math.toDegrees(asin(gy.toDouble())).toFloat()
+        val calcRoll = rollDeg ?: Math.toDegrees(atan2(gx.toDouble(), gz.toDouble())).toFloat()
+        val calcTiltFlat = tiltFromFlatDeg ?: Math.toDegrees(acos(gz.toDouble())).toFloat()
+        val calcUpright = uprightCameraMode ?: (abs(calcPitch) > 50f)
+        val calcHorizonRoll = horizonRollDeg ?: Math.toDegrees(atan2(gx.toDouble(), hypot(gy.toDouble(), gz.toDouble()))).toFloat()
+        val calcIsLevel = isLevel ?: ((if (calcUpright) abs(calcHorizonRoll) else calcTiltFlat) <= 3.5f)
+
+        // Axis indices: 1=X, 2=Y, 3=Z (negative = minus axis)
+        val remapped = if (calcUpright) {
+            when (displayRotation) {
+                Surface.ROTATION_90 -> remapMatrixAxes(rotationMatrix, -2, -3)
+                Surface.ROTATION_270 -> remapMatrixAxes(rotationMatrix, 2, -3)
+                else -> remapMatrixAxes(rotationMatrix, 1, -3)
+            }
+        } else {
+            when (displayRotation) {
+                Surface.ROTATION_90 -> remapMatrixAxes(rotationMatrix, 2, -1)
+                Surface.ROTATION_180 -> remapMatrixAxes(rotationMatrix, -1, -2)
+                Surface.ROTATION_270 -> remapMatrixAxes(rotationMatrix, -2, 1)
+                else -> rotationMatrix
+            }
+        }
+
+        val rawAzimuth = normalizeDegrees(
+            Math.toDegrees(atan2(remapped[1].toDouble(), remapped[4].toDouble())).toFloat()
+        )
 
         val smoothedAzimuth = if (previousAzimuthDeg != null) {
             smoothAzimuth(previousAzimuthDeg, rawAzimuth, smoothingAlpha)
@@ -608,11 +692,11 @@ object VastuCompassMath {
 
         return CompassReading(
             azimuthDeg = smoothedAzimuth,
-            pitchDeg = pitchDeg,
-            rollDeg = if (uprightCameraMode) horizonRollDeg else rollDeg,
-            tiltFromLevelDeg = tiltFromFlatDeg,
-            isLevel = isLevel,
-            isUprightCameraMode = uprightCameraMode,
+            pitchDeg = calcPitch,
+            rollDeg = if (calcUpright) calcHorizonRoll else calcRoll,
+            tiltFromLevelDeg = calcTiltFlat,
+            isLevel = calcIsLevel,
+            isUprightCameraMode = calcUpright,
             magneticFieldMicroTesla = magnetMicroTesla,
             zone = zoneForDegree(smoothedAzimuth),
             pada = padaForDegree(smoothedAzimuth),

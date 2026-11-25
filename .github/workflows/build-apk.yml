@@ -21,19 +21,35 @@ jobs:
           java-version: '21'
 
       - name: Configure Android SDK & Licenses
+        shell: bash
         run: |
+          set +o pipefail
           SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          mkdir -p "$SDK_ROOT/licenses"
           echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
           echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
+
+          # Pre-accept standard Android SDK & Google licenses so sdkmanager & AGP never prompt
+          printf "\n24333f8a63b6825ea9c5514f83c2829b004d1fee\nd56f5187479451eabf01fb78af6dfcb131a6481e\n8933bad161af4178b1185d1a37fbf41ea5269c55\n" > "$SDK_ROOT/licenses/android-sdk-license"
+          printf "\n84831b9409646a918e30573bab4c9c91346d8abd\n504667f4c0de7af1a06de9f4b1727b84351f2910\n" > "$SDK_ROOT/licenses/android-sdk-preview-license"
+          printf "\n33b6a2b64607f11b759f320ef9dff4ae5c47d97a\n" > "$SDK_ROOT/licenses/google-gdk-license"
+
           SDKMANAGER="$(command -v sdkmanager 2>/dev/null || true)"
           if [ -z "$SDKMANAGER" ] && [ -d "$SDK_ROOT/cmdline-tools" ]; then
             SDKMANAGER="$(find "$SDK_ROOT/cmdline-tools" -name sdkmanager -type f 2>/dev/null | head -n 1 || true)"
           fi
-          if [ -n "$SDKMANAGER" ] && [ -x "$SDKMANAGER" ]; then
-            (yes 2>/dev/null || true) | "$SDKMANAGER" --sdk_root="$SDK_ROOT" --licenses >/dev/null 2>&1 || true
-            for pkg in "platform-tools" "build-tools;36.0.0" "platforms;android-36" "platforms;android-36.1"; do
-              "$SDKMANAGER" --sdk_root="$SDK_ROOT" --install "$pkg" || true
-            done
+          if [ -z "$SDKMANAGER" ]; then
+            mkdir -p "$SDK_ROOT/cmdline-tools"
+            curl -sSL "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip" -o /tmp/cmdline-tools.zip
+            unzip -q /tmp/cmdline-tools.zip -d "$SDK_ROOT/cmdline-tools/tmp"
+            mv "$SDK_ROOT/cmdline-tools/tmp/cmdline-tools" "$SDK_ROOT/cmdline-tools/latest"
+            rm -rf "$SDK_ROOT/cmdline-tools/tmp" /tmp/cmdline-tools.zip
+            SDKMANAGER="$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          fi
+
+          if [ -x "$SDKMANAGER" ]; then
+            yes | "$SDKMANAGER" --sdk_root="$SDK_ROOT" --licenses >/dev/null 2>&1 || true
+            "$SDKMANAGER" --sdk_root="$SDK_ROOT" --install "platform-tools" "build-tools;36.0.0" "platforms;android-36" "platforms;android-36.1" || true
           fi
 
       - name: Set up Gradle 9.3.1
@@ -71,3 +87,4 @@ jobs:
           name: Vedicra Vastu APK (Latest)
           body: Direct installable APK built automatically from the latest code.
           files: Vedicra-Vastu-Solutions.apk
+          overwrite_files: true

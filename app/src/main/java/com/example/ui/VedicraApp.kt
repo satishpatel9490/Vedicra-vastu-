@@ -32,6 +32,7 @@ import com.example.ui.navigation.MapCompassAlignRoute
 import com.example.ui.navigation.PhotoViewerRoute
 import com.example.ui.navigation.RecentReportsRoute
 import com.example.ui.navigation.ReportEditorRoute
+import com.example.ui.navigation.ReportsHubRoute
 import com.example.ui.navigation.SavedReportsRoute
 import com.example.ui.navigation.SearchReportsRoute
 import com.example.ui.navigation.SettingsRoute
@@ -44,6 +45,7 @@ import com.example.ui.screens.MapCompassAlignScreen
 import com.example.ui.screens.PhotoViewerScreen
 import com.example.ui.screens.ReportEditorScreen
 import com.example.ui.screens.ReportListScreen
+import com.example.ui.screens.ReportsHubScreen
 import com.example.ui.screens.SearchReportsScreen
 import com.example.ui.screens.SettingsScreen
 import com.example.ui.theme.VedicraVastuTheme
@@ -107,11 +109,33 @@ fun VedicraApp(container: VedicraAppContainer) {
                         onSaveActiveReport = mainViewModel::saveActiveReportFromDashboard,
                         onResetActiveReport = mainViewModel::resetActiveReportFromDashboard,
                         onDeleteActiveReport = mainViewModel::deleteActiveReportFromDashboard,
-                        onOpenSavedReports = { navController.navigate(SavedReportsRoute) },
-                        onOpenSearchReports = { navController.navigate(SearchReportsRoute) },
-                        onOpenRecentReports = { navController.navigate(RecentReportsRoute) },
-                        onOpenExportedPdfs = { navController.navigate(ExportedPdfsRoute) },
+                        onOpenReports = { navController.navigate(ReportsHubRoute(initialTab = 0)) },
                         onOpenSettings = { navController.navigate(SettingsRoute) }
+                    )
+                }
+
+                composable<ReportsHubRoute> { backStackEntry ->
+                    val route = backStackEntry.toRoute<ReportsHubRoute>()
+                    ReportsHubScreen(
+                        initialTab = route.initialTab,
+                        query = searchQuery,
+                        savedReports = savedReports,
+                        recentReports = recentReports,
+                        exportedPdfs = exportedPdfs,
+                        onQueryChange = mainViewModel::updateSearchQuery,
+                        onBack = { navController.popBackStack() },
+                        onOpenReport = { id ->
+                            mainViewModel.setActiveReportId(id)
+                            navController.navigate(ReportEditorRoute(reportId = id))
+                        },
+                        onDuplicateReport = mainViewModel::duplicateReport,
+                        onGeneratePdf = { id, onPdfGenerated ->
+                            mainViewModel.regeneratePdfForReport(id) { pdf ->
+                                if (pdf != null) onPdfGenerated()
+                            }
+                        },
+                        onDeleteReport = mainViewModel::deleteReport,
+                        onDeletePdf = mainViewModel::deleteExportedPdf
                     )
                 }
 

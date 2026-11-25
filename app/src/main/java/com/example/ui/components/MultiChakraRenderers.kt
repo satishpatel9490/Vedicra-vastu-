@@ -17,9 +17,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.RotateLeft
+import androidx.compose.material.icons.automirrored.filled.RotateRight
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.RotateLeft
-import androidx.compose.material.icons.filled.RotateRight
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -246,7 +246,7 @@ fun ManualDegreeInputControl(
                     shape = RoundedCornerShape(8.dp),
                     modifier = Modifier.height(32.dp)
                 ) {
-                    Icon(Icons.Filled.RotateLeft, contentDescription = "Rotate -15°", modifier = Modifier.size(16.dp))
+                    Icon(Icons.AutoMirrored.Filled.RotateLeft, contentDescription = "Rotate -15°", modifier = Modifier.size(16.dp))
                 }
                 Slider(
                     value = norm,
@@ -265,7 +265,7 @@ fun ManualDegreeInputControl(
                     shape = RoundedCornerShape(8.dp),
                     modifier = Modifier.height(32.dp)
                 ) {
-                    Icon(Icons.Filled.RotateRight, contentDescription = "Rotate +15°", modifier = Modifier.size(16.dp))
+                    Icon(Icons.AutoMirrored.Filled.RotateRight, contentDescription = "Rotate +15°", modifier = Modifier.size(16.dp))
                 }
             }
             Text(
@@ -278,7 +278,7 @@ fun ManualDegreeInputControl(
 }
 
 /**
- * Unified Compose DrawScope dispatcher rendering any of the 5 clean Vedicra Vastu Chakras.
+ * Unified Compose DrawScope dispatcher rendering any of the 4 clean Vedicra Vastu Chakras.
  */
 fun DrawScope.drawChakraByTypeCompose(
     chakraType: VastuChakraType,
@@ -313,12 +313,6 @@ fun DrawScope.drawChakraByTypeCompose(
             showTopLubberNeedle = showTopLubberNeedle
         )
         VastuChakraType.MAIN_DOOR_32 -> drawMainDoor32ChakraCompose(
-            rotationDegrees = rotationDegrees,
-            textMeasurer = textMeasurer,
-            transparentFill = transparentFill,
-            showTopLubberNeedle = showTopLubberNeedle
-        )
-        VastuChakraType.PANCH_TATVA_COMPASS -> drawPanchTatvaCompassDialCompose(
             rotationDegrees = rotationDegrees,
             textMeasurer = textMeasurer,
             transparentFill = transparentFill,
@@ -807,120 +801,6 @@ fun DrawScope.drawMainDoor32ChakraCompose(
     }
 }
 
-/**
- * Clean Panch Tatva Compass Dial (Ether center + Water/Air/Fire/Earth gradient ring + needle).
- */
-fun DrawScope.drawPanchTatvaCompassDialCompose(
-    rotationDegrees: Float,
-    textMeasurer: TextMeasurer,
-    transparentFill: Boolean,
-    showTopLubberNeedle: Boolean
-) {
-    val cx = size.width / 2f
-    val cy = size.height / 2f
-    val radius = min(size.width, size.height) * 0.45f
-    if (radius < 40f) return
-
-    val rOuter = radius * 0.98f
-    val rRingOuter = radius * 0.87f
-    val rRingInner = radius * 0.69f
-    val rCenter = radius * 0.19f
-    val ringMid = (rRingInner + rRingOuter) / 2f
-    val ringWidth = rRingOuter - rRingInner
-
-    rotate(degrees = rotationDegrees, pivot = Offset(cx, cy)) {
-        // Gradient Sweep Ring for Water (N) -> Air (E) -> Fire (S) -> Earth (W)
-        val sweepBrush = Brush.sweepGradient(
-            0.00f to Color(0xFF5EB37E), // East-ish in screen angle (0 rad = +X = East)
-            0.16f to Color(0xFFD94A3E), // Fire (SE/S)
-            0.35f to Color(0xFFEAD438), // Earth (SW)
-            0.52f to Color(0xFFDFE4E8), // Air/Space (W/NW)
-            0.75f to Color(0xFF3E83C4), // Water (N)
-            1.00f to Color(0xFF5EB37E),
-            center = Offset(cx, cy)
-        )
-        drawCircle(
-            brush = sweepBrush,
-            radius = ringMid,
-            center = Offset(cx, cy),
-            style = Stroke(width = ringWidth),
-            alpha = if (transparentFill) 0.78f else 0.95f
-        )
-        drawCircle(color = Color(0xFF1F2421), radius = rRingOuter, center = Offset(cx, cy), style = Stroke(2f))
-        drawCircle(color = Color(0xFF1F2421), radius = rRingInner, center = Offset(cx, cy), style = Stroke(2f))
-
-        // 5 Element Labels around ring
-        listOf(
-            35f to "Water",
-            128f to "Fire",
-            222f to "Earth",
-            310f to "Air"
-        ).forEach { (deg, name) ->
-            drawRadialBannerText(
-                text = name,
-                angleDeg = deg,
-                midRadius = ringMid,
-                cx = cx, cy = cy,
-                fontSp = (radius * 0.056f).coerceIn(8f, 13f),
-                color = Color(0xFF111815),
-                textMeasurer = textMeasurer
-            )
-        }
-
-        // Cardinal N, E, S, W ticks + labels
-        listOf(0f to "N", 90f to "E", 180f to "S", 270f to "W").forEach { (deg, d) ->
-            drawRadialBannerText(
-                text = d,
-                angleDeg = deg,
-                midRadius = ringMid,
-                cx = cx, cy = cy,
-                fontSp = (radius * 0.070f).coerceIn(10f, 16f),
-                color = if (d == "N") Color(0xFFD32F2F) else Color(0xFF111815),
-                textMeasurer = textMeasurer
-            )
-        }
-
-        // 360° Fine outer scale
-        drawOuter360Scale(cx, cy, rOuter, rRingOuter, (rOuter + rRingOuter) / 2f, radius, 2f, 1f, textMeasurer)
-
-        // 4-point Compass Rose Needle (Red North tip)
-        val needleR = rRingInner * 0.88f
-        val baseHalf = rCenter * 0.34f
-        // North (Red)
-        val northNeedle = Path().apply {
-            moveTo(cx, cy - needleR)
-            lineTo(cx + baseHalf, cy)
-            lineTo(cx - baseHalf, cy)
-            close()
-        }
-        drawPath(northNeedle, Color(0xFFD32F2F))
-        // East, South, West (Deep Navy)
-        listOf(90f, 180f, 270f).forEach { rotDeg ->
-            rotate(degrees = rotDeg, pivot = Offset(cx, cy)) {
-                val p = Path().apply {
-                    moveTo(cx, cy - needleR * 0.88f)
-                    lineTo(cx + baseHalf, cy)
-                    lineTo(cx - baseHalf, cy)
-                    close()
-                }
-                drawPath(p, Color(0xFF1A3A54))
-            }
-        }
-
-        // Ether Center Hub
-        drawCircle(color = Color(0xEEFDFBF6), radius = rCenter, center = Offset(cx, cy))
-        drawCircle(color = Color(0xFF1F2A24), radius = rCenter, center = Offset(cx, cy), style = Stroke(2f))
-        val etherRes = textMeasurer.measure(
-            text = "Ether",
-            style = TextStyle(color = Color(0xFF111815), fontSize = (radius * 0.052f).coerceIn(8f, 13f).sp, fontWeight = FontWeight.Bold)
-        )
-        drawText(etherRes, topLeft = Offset(cx - etherRes.size.width / 2f, cy - etherRes.size.height / 2f))
-    }
-
-    if (showTopLubberNeedle) {
-        drawTopLubberMarker(cx, cy, rOuter, rCenter)
-    }
-}
 
 private fun DrawScope.drawRingSectorArc(
     cx: Float,

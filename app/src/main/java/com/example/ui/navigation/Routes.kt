@@ -6,6 +6,11 @@ import kotlinx.serialization.Serializable
 object DashboardRoute
 
 @Serializable
+data class ReportsHubRoute(
+    val initialTab: Int = 0
+)
+
+@Serializable
 object SavedReportsRoute
 
 @Serializable

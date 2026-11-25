@@ -5,6 +5,9 @@ import android.graphics.Bitmap
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertTextEquals
@@ -47,7 +50,9 @@ import com.example.ui.components.CompassTopDegreeTiltHud
 import com.example.ui.components.VastuChakraCanvas
 import com.example.ui.screens.DashboardScreen
 import com.example.ui.screens.ReportEditorScreen
+import com.example.ui.screens.ReportsHubScreen
 import com.example.ui.screens.editor.DegreesAndCompassSection
+import com.example.ui.screens.editor.EntranceDetailsSection
 import com.example.ui.screens.editor.UnifiedProblemsAnalysisRemediesSection
 import com.example.ui.theme.VedicraVastuTheme
 import com.example.ui.viewmodel.ReportEditorViewModel
@@ -145,10 +150,7 @@ class VedicraVastuComprehensiveTest {
                     onSaveActiveReport = {},
                     onResetActiveReport = {},
                     onDeleteActiveReport = {},
-                    onOpenSavedReports = {},
-                    onOpenSearchReports = {},
-                    onOpenRecentReports = {},
-                    onOpenExportedPdfs = {},
+                    onOpenReports = {},
                     onOpenSettings = {}
                 )
             }
@@ -158,17 +160,17 @@ class VedicraVastuComprehensiveTest {
         composeRule.onNodeWithTag("dashboard_shakti_chakra_button").assertIsDisplayed()
         composeRule.onNodeWithTag("dashboard_grid").performScrollToNode(hasText("Create New Report"))
         composeRule.onNodeWithText("Create New Report").assertIsDisplayed()
-        composeRule.onNodeWithTag("dashboard_grid").performScrollToNode(hasText("Saved Reports"))
-        composeRule.onNodeWithText("Saved Reports").assertIsDisplayed()
-        composeRule.onNodeWithTag("dashboard_grid").performScrollToNode(hasText("Search Reports"))
-        composeRule.onNodeWithText("Search Reports").assertIsDisplayed()
-        composeRule.onNodeWithTag("dashboard_grid").performScrollToNode(hasText("Recently Edited Reports"))
-        composeRule.onNodeWithText("Recently Edited Reports").assertIsDisplayed()
-        composeRule.onNodeWithTag("dashboard_grid").performScrollToNode(hasText("Exported PDF Reports"))
-        composeRule.onNodeWithText("Exported PDF Reports").assertIsDisplayed()
+        composeRule.onNodeWithTag("dashboard_grid").performScrollToNode(hasText("Reports"))
+        composeRule.onNodeWithText("Reports").assertIsDisplayed()
         composeRule.onNodeWithTag("dashboard_grid").performScrollToNode(hasText("Settings"))
         composeRule.onNodeWithText("Settings").assertIsDisplayed()
         composeRule.onNodeWithTag("theme_selector_button").assertIsDisplayed()
+
+        // Merged dashboard boxes must NOT appear separately on Home
+        assertEquals(0, composeRule.onAllNodesWithText("Saved Reports").fetchSemanticsNodes().size)
+        assertEquals(0, composeRule.onAllNodesWithText("Search Reports").fetchSemanticsNodes().size)
+        assertEquals(0, composeRule.onAllNodesWithText("Recently Edited Reports").fetchSemanticsNodes().size)
+        assertEquals(0, composeRule.onAllNodesWithText("Exported PDF Reports").fetchSemanticsNodes().size)
 
         // Must NOT display any Total Clients / Total Reports counters
         assertEquals(0, composeRule.onAllNodesWithText("Total Clients", substring = true, ignoreCase = true).fetchSemanticsNodes().size)
@@ -607,6 +609,100 @@ class VedicraVastuComprehensiveTest {
         composeRule.onNodeWithTag("compass_top_degree_hud").assertIsDisplayed()
         composeRule.onNodeWithText("Tilt: 4.5°", substring = true).assertIsDisplayed()
         composeRule.onNodeWithText("Between N4 & N5", substring = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun entranceDetailsSection_allowsMultiSelect_andShowsDevtasAndAttributesBelow() {
+        var currentReport by androidx.compose.runtime.mutableStateOf(ReportEntity(id = "rep_ent_1"))
+
+        composeRule.setContent {
+            VedicraVastuTheme(themeMode = AppThemeMode.IVORY_GOLD) {
+                Box(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    EntranceDetailsSection(
+                        report = currentReport,
+                        onUpdate = { transform -> currentReport = transform(currentReport) },
+                        onAddEntrance = { entrance ->
+                            val list = JsonCodec.decodeEntrances(currentReport.additionalEntrancesJson).toMutableList()
+                            list.add(entrance)
+                            currentReport = currentReport.copy(
+                                additionalEntrancesJson = JsonCodec.encodeEntrances(list)
+                            )
+                        },
+                        onDeleteEntrance = { id ->
+                            val list = JsonCodec.decodeEntrances(currentReport.additionalEntrancesJson)
+                                .filterNot { it.id == id }
+                            currentReport = currentReport.copy(
+                                additionalEntrancesJson = JsonCodec.encodeEntrances(list)
+                            )
+                        },
+                        onShowMessage = {}
+                    )
+                }
+            }
+        }
+        composeRule.waitForIdle()
+
+        // Select two used entrances: N3 (Mukhya) and E3 (Jayant)
+        composeRule.onNodeWithTag("entrance_pada_chip_N3").performScrollTo().performClick()
+        composeRule.onNodeWithTag("entrance_pada_chip_E3").performScrollTo().performClick()
+        composeRule.waitForIdle()
+
+        // Both should appear in the summary and detailed Devtas + Attributes cards below
+        composeRule.onNodeWithTag("selected_entrance_detail_card_N3").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("entrance_devta_text_N3").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("entrance_attributes_text_N3").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("entrance_effect_text_N3").performScrollTo().assertIsDisplayed()
+
+        composeRule.onNodeWithTag("selected_entrance_detail_card_E3").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("entrance_devta_text_E3").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("entrance_attributes_text_E3").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("entrance_effect_text_E3").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun reportsHubScreen_providesSearchAllRecentAndExportedPdfsTabs() {
+        val r1 = ReportEntity(id = "rep_a", clientName = "Anand Textiles", city = "Surat", isDraft = false)
+        val r2 = ReportEntity(id = "rep_b", clientName = "Mehta Villa", city = "Pune", isDraft = false)
+        val pdf1 = com.example.data.local.ExportedPdfEntity(
+            id = "pdf_1",
+            reportId = "rep_a",
+            clientName = "Anand Textiles",
+            fileName = "Vedicra_Anand_Textiles.pdf",
+            filePath = "/tmp/Vedicra_Anand_Textiles.pdf",
+            pageCount = 4
+        )
+        var query by androidx.compose.runtime.mutableStateOf("")
+
+        composeRule.setContent {
+            VedicraVastuTheme(themeMode = AppThemeMode.IVORY_GOLD) {
+                ReportsHubScreen(
+                    initialTab = 0,
+                    query = query,
+                    savedReports = listOf(r1, r2),
+                    recentReports = listOf(r2),
+                    exportedPdfs = listOf(pdf1),
+                    onQueryChange = { query = it },
+                    onBack = {},
+                    onOpenReport = {},
+                    onDuplicateReport = {},
+                    onGeneratePdf = { _, _ -> },
+                    onDeleteReport = {},
+                    onDeletePdf = {}
+                )
+            }
+        }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithTag("reports_hub_search_input").assertIsDisplayed()
+        composeRule.onNodeWithTag("reports_tab_all").assertIsDisplayed()
+        composeRule.onNodeWithTag("reports_tab_recent").assertIsDisplayed()
+        composeRule.onNodeWithTag("reports_tab_pdfs").assertIsDisplayed()
+        composeRule.onNodeWithText("Anand Textiles").assertIsDisplayed()
+        composeRule.onNodeWithText("Mehta Villa").assertIsDisplayed()
+
+        composeRule.onNodeWithTag("reports_tab_pdfs").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("Vedicra_Anand_Textiles.pdf").assertIsDisplayed()
     }
 
     private fun createTestJpeg(reportId: String, name: String, color: Int): File {

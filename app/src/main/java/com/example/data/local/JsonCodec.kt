@@ -9,6 +9,7 @@ import kotlinx.serialization.json.Json
 object JsonCodec {
     val json = Json {
         ignoreUnknownKeys = true
+        coerceInputValues = true
         encodeDefaults = true
         prettyPrint = true
     }

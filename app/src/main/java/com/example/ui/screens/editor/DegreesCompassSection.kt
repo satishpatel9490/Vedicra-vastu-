@@ -135,7 +135,7 @@ fun DegreesAndCompassSection(
                 }
             )
 
-            // Chakra Selector Switch (Shakti, 45 Devta, Panch Tatva, Main Door, Tatva Dial)
+            // Chakra Selector Switch (Shakti, 45 Devta, Panch Tatva, Main Door)
             ChakraTypeSelectorRow(
                 selectedType = selectedChakraType,
                 onSelectType = { selectedChakraType = it },
@@ -175,7 +175,8 @@ fun DegreesAndCompassSection(
                     FilterChip(
                         selected = !useManualDial,
                         onClick = { useManualDial = false },
-                        label = { Text("Live Sensor") }
+                        label = { Text("Live Sensor") },
+                        modifier = Modifier.testTag("compass_live_sensor_chip")
                     )
                 }
                 FilterChip(

@@ -21,8 +21,13 @@ import org.junit.Test
 class VastuNewFeaturesUnitTest {
 
     @Test
-    fun allFiveChakrasAnd45DevtaMandala_specIsComplete() {
-        assertEquals(5, VastuChakraType.entries.size)
+    fun allFourChakrasAnd45DevtaMandala_specIsComplete() {
+        assertEquals(4, VastuChakraType.entries.size)
+        assertFalse(VastuChakraType.entries.any { it.name == "PANCH_TATVA_COMPASS" })
+        val legacyRemovedChakra = JsonCodec.decodeWorkspaceMetadata(
+            """{"showGridOverlay":true,"chakraType":"PANCH_TATVA_COMPASS"}"""
+        )
+        assertEquals(VastuChakraType.SHAKTI_16_32, legacyRemovedChakra.chakraType)
         // 13 inner + 32 outer padas = 45 Devtas
         assertEquals(13, VastuChakraSpec.innerDevtas13.size)
         assertEquals(32, VastuChakraSpec.padas32.size)
@@ -41,6 +46,41 @@ class VastuNewFeaturesUnitTest {
         assertTrue(VastuChakraSpec.padas32.first { it.code == "E3" }.entranceEffect.contains("profit", ignoreCase = true))
         assertTrue(VastuChakraSpec.padas32.first { it.code == "S6" }.entranceEffect.contains("poverty", ignoreCase = true))
         assertTrue(VastuChakraSpec.padas32.first { it.code == "W6" }.entranceEffect.contains("depression", ignoreCase = true))
+    }
+
+    @Test
+    fun rotationMatrixCompass_andWallTiltDifferenceFormatting_workAccurately() {
+        // Identity rotation matrix = device flat & aligned to Magnetic North (0 deg)
+        val identity = floatArrayOf(
+            1f, 0f, 0f,
+            0f, 1f, 0f,
+            0f, 0f, 1f
+        )
+        val flatNorth = VastuCompassMath.computeOrientationFromRotationMatrix(
+            rotationMatrix = identity,
+            displayRotation = android.view.Surface.ROTATION_0
+        )
+        assertEquals(0f, flatNorth.azimuthDeg, 1.0f)
+        assertTrue(flatNorth.isLevel)
+        assertFalse(flatNorth.isUprightCameraMode)
+
+        // 90° clockwise yaw around Z (top of phone facing East) -> R = [0, 1, 0; -1, 0, 0; 0, 0, 1]
+        val eastYaw = floatArrayOf(
+            0f, 1f, 0f,
+            -1f, 0f, 0f,
+            0f, 0f, 1f
+        )
+        val facingEast = VastuCompassMath.computeOrientationFromRotationMatrix(
+            rotationMatrix = eastYaw,
+            displayRotation = android.view.Surface.ROTATION_0
+        )
+        assertEquals(90f, facingEast.azimuthDeg, 2.0f)
+        assertEquals("E", facingEast.zone.code)
+
+        // Wall tilt difference labels for Google Map reference axis alignment
+        assertTrue(com.example.ui.screens.formatWallTiltDifferenceLabel(0.1f).contains("Aligned to True North"))
+        assertTrue(com.example.ui.screens.formatWallTiltDifferenceLabel(15.5f).contains("15.5° CCW"))
+        assertTrue(com.example.ui.screens.formatWallTiltDifferenceLabel(345.0f).contains("15.0° CW"))
     }
 
     @Test

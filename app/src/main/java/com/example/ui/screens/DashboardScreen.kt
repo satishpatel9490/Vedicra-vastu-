@@ -30,11 +30,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FolderCopy
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Save
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.Explore
 import androidx.compose.material3.Card
@@ -98,10 +95,7 @@ fun DashboardScreen(
     onSaveActiveReport: () -> Unit,
     onResetActiveReport: () -> Unit,
     onDeleteActiveReport: () -> Unit,
-    onOpenSavedReports: () -> Unit,
-    onOpenSearchReports: () -> Unit,
-    onOpenRecentReports: () -> Unit,
-    onOpenExportedPdfs: () -> Unit,
+    onOpenReports: () -> Unit,
     onOpenSettings: () -> Unit
 ) {
     val brandColors = LocalVedicraColors.current
@@ -111,10 +105,7 @@ fun DashboardScreen(
 
     val options = remember(
         onCreateNewReport,
-        onOpenSavedReports,
-        onOpenSearchReports,
-        onOpenRecentReports,
-        onOpenExportedPdfs,
+        onOpenReports,
         onOpenSettings
     ) {
         listOf(
@@ -127,32 +118,11 @@ fun DashboardScreen(
                 onClick = onCreateNewReport
             ),
             DashboardOption(
-                title = "Saved Reports",
-                subtitle = "Open, edit, duplicate or manage saved client reports",
+                title = "Reports",
+                subtitle = "Search, open, edit, recent & export A4 PDF reports",
                 icon = Icons.Filled.FolderCopy,
-                testTag = "dash_saved_reports",
-                onClick = onOpenSavedReports
-            ),
-            DashboardOption(
-                title = "Search Reports",
-                subtitle = "Find reports by client name, mobile, city or property",
-                icon = Icons.Filled.Search,
-                testTag = "dash_search_reports",
-                onClick = onOpenSearchReports
-            ),
-            DashboardOption(
-                title = "Recently Edited Reports",
-                subtitle = "Quickly resume your latest site consultations",
-                icon = Icons.Filled.History,
-                testTag = "dash_recent_reports",
-                onClick = onOpenRecentReports
-            ),
-            DashboardOption(
-                title = "Exported PDF Reports",
-                subtitle = "View, share on WhatsApp or save generated A4 PDFs",
-                icon = Icons.Filled.PictureAsPdf,
-                testTag = "dash_exported_pdfs",
-                onClick = onOpenExportedPdfs
+                testTag = "dash_reports",
+                onClick = onOpenReports
             ),
             DashboardOption(
                 title = "Settings",
@@ -414,8 +384,14 @@ fun DashboardScreen(
                     }
                 }
 
-                // 6 Core Navigation Cards
-                items(options) { item ->
+                // 3 Core Navigation Cards: Create New Report (featured), Reports (merged hub), Settings
+                items(
+                    items = options,
+                    key = { it.testTag },
+                    span = { item ->
+                        if (item.isPrimary && columns == 2) GridItemSpan(columns) else GridItemSpan(1)
+                    }
+                ) { item ->
                     DashboardActionCard(option = item)
                 }
             }

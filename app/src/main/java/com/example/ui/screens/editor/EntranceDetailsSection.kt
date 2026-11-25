@@ -15,21 +15,23 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AddLocationAlt
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.ClearAll
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DoorFront
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Layers
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -47,6 +49,8 @@ import com.example.data.local.JsonCodec
 import com.example.data.local.ReportEntity
 import com.example.model.EntranceDetail
 import com.example.model.VastuChakraSpec
+import com.example.model.VastuCompassMath
+import com.example.model.VastuInnerDevta
 import com.example.model.VastuPada
 import com.example.ui.components.PrimaryDarkGreenButton
 import com.example.ui.components.VedicraSectionCard
@@ -54,6 +58,32 @@ import com.example.ui.theme.LocalVedicraColors
 import java.util.Locale
 
 private val directionFilterGroups = listOf("All", "North", "East", "South", "West")
+
+private fun padaIdFor(code: String): String = "pada_$code"
+
+private fun EntranceDetail.matchesPadaCode(code: String): Boolean {
+    if (id == padaIdFor(code)) return true
+    val trimmed = label.trim()
+    return trimmed == code ||
+        trimmed.startsWith("$code ") ||
+        trimmed.startsWith("$code(") ||
+        trimmed.startsWith("$code—") ||
+        trimmed.startsWith("$code-")
+}
+
+private fun innerDevtasForPada(pada: VastuPada): List<VastuInnerDevta> {
+    val mid = VastuCompassMath.normalizeDegrees(pada.midDegree)
+    return VastuChakraSpec.innerDevtas13.filter { devta ->
+        devta.ringLayer > 1 && run {
+            val end = devta.startDegree + devta.sweepDegree
+            if (end <= 360f) {
+                mid >= devta.startDegree && mid < end
+            } else {
+                mid >= devta.startDegree || mid < (end - 360f)
+            }
+        }
+    }
+}
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -65,8 +95,7 @@ fun EntranceDetailsSection(
     onShowMessage: (String) -> Unit
 ) {
     val brandColors = LocalVedicraColors.current
-    var selectedGroup by remember { mutableStateOf("North") }
-    var selectedPadaCode by remember { mutableStateOf("N4") }
+    var selectedGroup by remember { mutableStateOf("All") }
 
     val filteredPadas = remember(selectedGroup) {
         if (selectedGroup == "All") {
@@ -76,20 +105,30 @@ fun EntranceDetailsSection(
         }
     }
 
-    val selectedPada: VastuPada = remember(selectedPadaCode, filteredPadas) {
-        VastuChakraSpec.padas32.firstOrNull { it.code == selectedPadaCode }
-            ?: filteredPadas.firstOrNull()
-            ?: VastuChakraSpec.padas32.first()
-    }
-
     val additionalEntrances = remember(report.additionalEntrancesJson) {
         JsonCodec.decodeEntrances(report.additionalEntrancesJson)
     }
 
+    val selectedPadas: List<VastuPada> = remember(additionalEntrances) {
+        VastuChakraSpec.padasNorthToWestOrder.filter { pada ->
+            additionalEntrances.any { it.matchesPadaCode(pada.code) }
+        }
+    }
+
+    val selectedPadaCodes = remember(selectedPadas) {
+        selectedPadas.map { it.code }.toSet()
+    }
+
+    val customNonPadaEntrances = remember(additionalEntrances) {
+        additionalEntrances.filter { entry ->
+            VastuChakraSpec.padas32.none { pada -> entry.matchesPadaCode(pada.code) }
+        }
+    }
+
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         VedicraSectionCard(
-            title = "32 Entrances & Effects",
-            subtitle = "Select an entrance pada (N1–W8) to inspect its Vastu effect & save to report",
+            title = "Site Entrances & Effects (Multi-Select)",
+            subtitle = "Tap one or more entrance padas (N1–W8) used on site to inspect their Devtas, zone attributes & effects below",
             icon = Icons.Filled.DoorFront
         ) {
             // Direction Group Filter
@@ -100,17 +139,7 @@ fun EntranceDetailsSection(
                 directionFilterGroups.forEach { group ->
                     FilterChip(
                         selected = selectedGroup == group,
-                        onClick = {
-                            selectedGroup = group
-                            val firstInGroup = if (group == "All") {
-                                VastuChakraSpec.padasNorthToWestOrder.first()
-                            } else {
-                                VastuChakraSpec.padasNorthToWestOrder.first { it.directionGroup == group }
-                            }
-                            if (group != "All" && selectedPada.directionGroup != group) {
-                                selectedPadaCode = firstInGroup.code
-                            }
-                        },
+                        onClick = { selectedGroup = group },
                         label = {
                             val suffix = when (group) {
                                 "North" -> " (N1–N8)"
@@ -129,14 +158,56 @@ fun EntranceDetailsSection(
                 }
             }
 
-            // Selectable Pada Grid (N1..N8 etc.)
+            // Selection status & Clear button
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = if (selectedPadas.isEmpty()) {
+                        "Tap any entrances below to mark used on site"
+                    } else {
+                        "Used on site (${selectedPadas.size}): ${selectedPadas.joinToString(", ") { it.code }}"
+                    },
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (selectedPadas.isEmpty()) {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    } else {
+                        MaterialTheme.colorScheme.primary
+                    },
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("entrance_selected_summary")
+                )
+                if (selectedPadas.isNotEmpty()) {
+                    TextButton(
+                        onClick = {
+                            selectedPadas.forEach { pada ->
+                                additionalEntrances
+                                    .filter { it.matchesPadaCode(pada.code) }
+                                    .forEach { onDeleteEntrance(it.id) }
+                            }
+                            onShowMessage("Cleared selected site entrances")
+                        },
+                        modifier = Modifier.testTag("entrance_clear_selection_button")
+                    ) {
+                        Icon(Icons.Filled.ClearAll, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Clear")
+                    }
+                }
+            }
+
+            // Multi-Selectable Pada Grid (N1..W8)
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 filteredPadas.forEach { pada ->
-                    val isSelected = pada.code == selectedPada.code
+                    val isSelected = pada.code in selectedPadaCodes
                     val statusTint = if (pada.isAuspicious) Color(0xFF2E7D32) else Color(0xFFC62828)
                     val containerColor = when {
                         isSelected -> statusTint
@@ -150,7 +221,28 @@ fun EntranceDetailsSection(
                     }
 
                     Surface(
-                        onClick = { selectedPadaCode = pada.code },
+                        onClick = {
+                            if (isSelected) {
+                                additionalEntrances
+                                    .filter { it.matchesPadaCode(pada.code) }
+                                    .forEach { onDeleteEntrance(it.id) }
+                                onShowMessage("Removed entrance ${pada.code}")
+                            } else {
+                                val zone = VastuCompassMath.zoneForDegree(pada.midDegree)
+                                val statusText = if (pada.isAuspicious) "Auspicious ✓" else "Inauspicious ✗"
+                                val spanLabel = "${String.format(Locale.US, "%.2f", pada.startDegree)}° – ${String.format(Locale.US, "%.2f", pada.endDegree)}°"
+                                onAddEntrance(
+                                    EntranceDetail(
+                                        id = padaIdFor(pada.code),
+                                        direction = pada.directionGroup,
+                                        label = "${pada.code} — ${pada.deity}",
+                                        degrees = spanLabel,
+                                        notes = "$statusText • Zone: ${zone.code} (${zone.attributeTitle}) • Devta: ${pada.deity} (#${pada.padaNumber45}/45) — ${pada.entranceEffect}"
+                                    )
+                                )
+                                onShowMessage("Added entrance ${pada.code} (${pada.deity})")
+                            }
+                        },
                         shape = RoundedCornerShape(10.dp),
                         color = containerColor,
                         border = BorderStroke(
@@ -180,151 +272,232 @@ fun EntranceDetailsSection(
                     }
                 }
             }
+        }
 
-            // Selected Entrance Detailed Effects Card
-            val isGood = selectedPada.isAuspicious
-            val accentColor = if (isGood) Color(0xFF2E7D32) else Color(0xFFC62828)
-            val badgeBg = if (isGood) Color(0xFFE8F5E9) else Color(0xFFFFEBEE)
-            val spanLabel = "${String.format(Locale.US, "%.2f", selectedPada.startDegree)}° – ${String.format(Locale.US, "%.2f", selectedPada.endDegree)}°"
-
-            Card(
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
-                ),
-                border = BorderStroke(1.5.dp, accentColor.copy(alpha = 0.55f)),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("selected_entrance_detail_card")
-            ) {
-                Column(
-                    modifier = Modifier.padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+        // Selected Entrances: Attributes, Associated Devtas & Effects
+        VedicraSectionCard(
+            title = "Selected Entrances — Devtas & Attributes",
+            subtitle = if (selectedPadas.isEmpty()) {
+                "Select one or more entrances above to view their Devtas, zone attributes and Vastu effects"
+            } else {
+                "Showing ${selectedPadas.size} selected entrance(s) with associated Devtas, 16-zone attributes and effects"
+            },
+            icon = Icons.Filled.Layers
+        ) {
+            if (selectedPadas.isEmpty()) {
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                    border = BorderStroke(1.dp, brandColors.cardBorder),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("selected_entrances_empty_state")
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "${selectedPada.code} — ${selectedPada.deity}",
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = "${selectedPada.directionGroup} Wall • $spanLabel • Element: ${selectedPada.element.label}",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                    Text(
+                        text = "No entrances marked as used yet. Tap N1–W8 chips above (for example N3, N4, E3, S3) to select multiple entrances and view all their Devtas, elements, attributes and effects here.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(14.dp)
+                    )
+                }
+            } else {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.testTag("selected_entrances_details_list")
+                ) {
+                    selectedPadas.forEach { pada ->
+                        val isGood = pada.isAuspicious
+                        val accentColor = if (isGood) Color(0xFF2E7D32) else Color(0xFFC62828)
+                        val badgeBg = if (isGood) Color(0xFFE8F5E9) else Color(0xFFFFEBEE)
+                        val spanLabel = "${String.format(Locale.US, "%.2f", pada.startDegree)}° – ${String.format(Locale.US, "%.2f", pada.endDegree)}°"
+                        val zone = VastuCompassMath.zoneForDegree(pada.midDegree)
+                        val innerDevtas = innerDevtasForPada(pada)
+                        val devtaAssociation = buildString {
+                            append("Outer Devta: ${pada.deity} (Mandala #${pada.padaNumber45} of 45)")
+                            if (innerDevtas.isNotEmpty()) {
+                                append(" • Inner Devta: ")
+                                append(innerDevtas.joinToString(", ") { "${it.name.replace('\n', ' ')} (#${it.devtaNumber})" })
+                            }
                         }
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = badgeBg,
-                            border = BorderStroke(1.dp, accentColor.copy(alpha = 0.5f))
-                        ) {
-                            Text(
-                                text = if (isGood) "✓ Auspicious" else "✗ Inauspicious",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = accentColor,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
-                            )
-                        }
-                    }
 
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.surface,
-                        border = BorderStroke(1.dp, brandColors.cardBorder),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        Card(
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                            ),
+                            border = BorderStroke(1.5.dp, accentColor.copy(alpha = 0.55f)),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("selected_entrance_detail_card_${pada.code}")
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            Column(
+                                modifier = Modifier.padding(14.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Icon(
-                                    imageVector = Icons.Filled.Info,
-                                    contentDescription = null,
-                                    tint = accentColor,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Text(
-                                    text = "Vastu Entrance Effect (${selectedPada.code})",
-                                    style = MaterialTheme.typography.labelLarge,
-                                    fontWeight = FontWeight.Bold,
-                                    color = accentColor
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "${pada.code} — ${pada.deity}",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Text(
+                                            text = "${pada.directionGroup} Wall • $spanLabel",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Surface(
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = badgeBg,
+                                            border = BorderStroke(1.dp, accentColor.copy(alpha = 0.5f))
+                                        ) {
+                                            Text(
+                                                text = if (isGood) "✓ Auspicious" else "✗ Inauspicious",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontWeight = FontWeight.Bold,
+                                                color = accentColor,
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                            )
+                                        }
+                                        IconButton(
+                                            onClick = {
+                                                additionalEntrances
+                                                    .filter { it.matchesPadaCode(pada.code) }
+                                                    .forEach { onDeleteEntrance(it.id) }
+                                            },
+                                            modifier = Modifier
+                                                .minimumInteractiveComponentSize()
+                                                .testTag("remove_selected_entrance_${pada.code}")
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Filled.Delete,
+                                                contentDescription = "Remove ${pada.code}",
+                                                tint = MaterialTheme.colorScheme.error
+                                            )
+                                        }
+                                    }
+                                }
+
+                                // Associated Devtas & 16-Zone Attributes Block
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = MaterialTheme.colorScheme.surface,
+                                    border = BorderStroke(1.dp, brandColors.cardBorder),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(10.dp),
+                                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Filled.Star,
+                                                contentDescription = null,
+                                                tint = brandColors.goldAccent,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                            Text(
+                                                text = "Associated Devtas",
+                                                style = MaterialTheme.typography.labelLarge,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
+                                        Text(
+                                            text = devtaAssociation,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            fontWeight = FontWeight.Medium,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            modifier = Modifier.testTag("entrance_devta_text_${pada.code}")
+                                        )
+                                        Text(
+                                            text = "Zone & Attributes: ${zone.fullName} • ${zone.attributeTitle} • Element: ${pada.element.label}",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.testTag("entrance_attributes_text_${pada.code}")
+                                        )
+                                    }
+                                }
+
+                                // Entrance Effect Block
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = MaterialTheme.colorScheme.surface,
+                                    border = BorderStroke(1.dp, brandColors.cardBorder),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(10.dp),
+                                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Filled.Info,
+                                                contentDescription = null,
+                                                tint = accentColor,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                            Text(
+                                                text = "Vastu Entrance Effect (${pada.code})",
+                                                style = MaterialTheme.typography.labelLarge,
+                                                fontWeight = FontWeight.Bold,
+                                                color = accentColor
+                                            )
+                                        }
+                                        Text(
+                                            text = pada.entranceEffect,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            modifier = Modifier.testTag("entrance_effect_text_${pada.code}")
+                                        )
+                                    }
+                                }
+
+                                PrimaryDarkGreenButton(
+                                    text = "Set ${pada.code} as Main Entrance",
+                                    icon = Icons.Filled.CheckCircle,
+                                    onClick = {
+                                        val statusText = if (isGood) "Auspicious ✓" else "Inauspicious ✗"
+                                        val note = "${pada.code} ${pada.deity} ($spanLabel • $statusText)\nZone: ${zone.fullName} (${zone.attributeTitle})\n$devtaAssociation\nEffect: ${pada.entranceEffect}"
+                                        onUpdate { curr ->
+                                            curr.copy(
+                                                mainEntranceDirection = pada.directionGroup,
+                                                mainEntranceNotes = note
+                                            )
+                                        }
+                                        onShowMessage("Main Entrance set to ${pada.code} (${pada.deity})")
+                                    },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .testTag("entrance_set_main_button_${pada.code}")
                                 )
                             }
-                            Text(
-                                text = selectedPada.entranceEffect,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.testTag("entrance_effect_text")
-                            )
-                        }
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        PrimaryDarkGreenButton(
-                            text = "Set Main Entrance",
-                            icon = Icons.Filled.CheckCircle,
-                            onClick = {
-                                val statusText = if (isGood) "Auspicious ✓" else "Inauspicious ✗"
-                                val note = "${selectedPada.code} ${selectedPada.deity} ($spanLabel • $statusText)\nEffect: ${selectedPada.entranceEffect}"
-                                onUpdate { curr ->
-                                    curr.copy(
-                                        mainEntranceDirection = selectedPada.directionGroup,
-                                        mainEntranceNotes = note
-                                    )
-                                }
-                                onShowMessage("Main Entrance set to ${selectedPada.code} (${selectedPada.deity})")
-                            },
-                            modifier = Modifier
-                                .weight(1f)
-                                .testTag("entrance_set_main_button")
-                        )
-                        OutlinedButton(
-                            onClick = {
-                                val statusText = if (isGood) "Auspicious ✓" else "Inauspicious ✗"
-                                onAddEntrance(
-                                    EntranceDetail(
-                                        direction = selectedPada.directionGroup,
-                                        label = "${selectedPada.code} (${selectedPada.deity})",
-                                        degrees = spanLabel,
-                                        notes = "$statusText — ${selectedPada.entranceEffect}"
-                                    )
-                                )
-                                onShowMessage("Added ${selectedPada.code} to entrances list")
-                            },
-                            shape = RoundedCornerShape(12.dp),
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 10.dp),
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(48.dp)
-                                .testTag("entrance_add_list_button")
-                        ) {
-                            Icon(Icons.Filled.AddLocationAlt, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text("Add to List", style = MaterialTheme.typography.labelMedium)
                         }
                     }
                 }
             }
         }
 
-        // Report's Logged Entrances & Effects Summary
+        // Report's Logged Main & Custom Entrances Summary
         VedicraSectionCard(
             title = "Logged Report Entrances",
-            subtitle = "Included in the Property Section & A4 PDF Report",
+            subtitle = "Main Entrance and any custom compass-captured entrances included in A4 PDF",
             icon = Icons.Filled.DoorFront
         ) {
             Surface(
@@ -343,20 +516,22 @@ fun EntranceDetailsSection(
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = report.mainEntranceNotes.ifBlank { "No pada effect selected yet — select N1–W8 above and tap 'Set Main Entrance'." },
+                        text = report.mainEntranceNotes.ifBlank {
+                            "No main entrance pada selected yet — tap an entrance above and press 'Set as Main Entrance'."
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
 
-            if (additionalEntrances.isNotEmpty()) {
+            if (customNonPadaEntrances.isNotEmpty()) {
                 Text(
-                    text = "Additional Entrances (${additionalEntrances.size})",
+                    text = "Other Logged Entrances (${customNonPadaEntrances.size})",
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.primary
                 )
-                additionalEntrances.forEach { item ->
+                customNonPadaEntrances.forEach { item ->
                     Surface(
                         shape = RoundedCornerShape(12.dp),
                         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),

@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -28,6 +29,7 @@ import androidx.compose.material.icons.automirrored.filled.ListAlt
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.AttachFile
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
@@ -44,16 +46,10 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -468,7 +464,7 @@ fun UnifiedProblemsAnalysisRemediesSection(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun InlineProblemZoneRemarksRemedyCard(
     serialNumber: Int,
@@ -855,7 +851,6 @@ private fun InlineProblemZoneRemarksRemedyCard(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ProblemDropdownColumn(
     row: AnalysisRowEntity,
@@ -865,7 +860,7 @@ private fun ProblemDropdownColumn(
     serialNumber: Int,
     modifier: Modifier = Modifier
 ) {
-    var expanded by remember { mutableStateOf(false) }
+    var showPicker by remember { mutableStateOf(false) }
     val allOptions = remember {
         VastuConstants.predefinedProblems + CUSTOM_PROBLEM_OPTION
     }
@@ -876,42 +871,94 @@ private fun ProblemDropdownColumn(
     }
 
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        ExposedDropdownMenuBox(
-            expanded = expanded,
-            onExpandedChange = { expanded = !expanded }
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { showPicker = true }
         ) {
             OutlinedTextField(
                 value = displayValue.ifBlank { "Select Problem" },
                 onValueChange = {},
                 readOnly = true,
+                enabled = false,
                 label = { Text("Problem") },
-                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                trailingIcon = {
+                    Icon(
+                        imageVector = Icons.Filled.ArrowDropDown,
+                        contentDescription = "Select Problem"
+                    )
+                },
                 singleLine = false,
                 maxLines = 2,
                 shape = RoundedCornerShape(12.dp),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = MaterialTheme.colorScheme.primary,
-                    unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                    disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                    disabledBorderColor = MaterialTheme.colorScheme.outline,
+                    disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    disabledTrailingIconColor = MaterialTheme.colorScheme.onSurfaceVariant
                 ),
                 modifier = Modifier
-                    .menuAnchor(MenuAnchorType.PrimaryNotEditable)
                     .fillMaxWidth()
                     .testTag("problem_dropdown_row_$serialNumber")
             )
-            ExposedDropdownMenu(
-                expanded = expanded,
-                onDismissRequest = { expanded = false }
-            ) {
-                allOptions.forEach { option ->
-                    DropdownMenuItem(
-                        text = { Text(option, style = MaterialTheme.typography.bodyMedium) },
-                        onClick = {
-                            onSelectPredefined(option)
-                            expanded = false
+        }
+
+        if (showPicker) {
+            AlertDialog(
+                onDismissRequest = { showPicker = false },
+                title = { Text("Select Problem") },
+                text = {
+                    Column(
+                        modifier = Modifier
+                            .heightIn(max = 380.dp)
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        allOptions.forEach { option ->
+                            val selected = option == displayValue
+                            Surface(
+                                onClick = {
+                                    showPicker = false
+                                    onSelectPredefined(option)
+                                },
+                                shape = RoundedCornerShape(10.dp),
+                                color = if (selected) {
+                                    MaterialTheme.colorScheme.primaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = option,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    if (selected) {
+                                        Icon(
+                                            imageVector = Icons.Filled.Check,
+                                            contentDescription = "Selected",
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                }
+                            }
                         }
-                    )
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showPicker = false }) {
+                        Text("Cancel")
+                    }
                 }
-            }
+            )
         }
 
         if (useCustomInput || row.clientProblem == "Other problems") {
@@ -933,7 +980,7 @@ private fun ExpectedZoneInputBox(
     serialNumber: Int,
     modifier: Modifier = Modifier
 ) {
-    var zoneMenuExpanded by remember { mutableStateOf(false) }
+    var showZonePicker by remember { mutableStateOf(false) }
 
     Box(modifier = modifier) {
         OutlinedTextField(
@@ -945,28 +992,11 @@ private fun ExpectedZoneInputBox(
             minLines = 1,
             maxLines = 3,
             trailingIcon = {
-                Box {
-                    IconButton(onClick = { zoneMenuExpanded = true }) {
-                        Icon(
-                            imageVector = Icons.Filled.ArrowDropDown,
-                            contentDescription = "Pick Vastu Zone"
-                        )
-                    }
-                    DropdownMenu(
-                        expanded = zoneMenuExpanded,
-                        onDismissRequest = { zoneMenuExpanded = false }
-                    ) {
-                        VastuConstants.sixteenVastuZones.forEach { zone ->
-                            DropdownMenuItem(
-                                text = { Text(zone, style = MaterialTheme.typography.bodySmall) },
-                                onClick = {
-                                    val updated = if (value.isBlank()) zone else "$value, $zone"
-                                    onValueChange(updated)
-                                    zoneMenuExpanded = false
-                                }
-                            )
-                        }
-                    }
+                IconButton(onClick = { showZonePicker = true }) {
+                    Icon(
+                        imageVector = Icons.Filled.ArrowDropDown,
+                        contentDescription = "Pick Vastu Zone"
+                    )
                 }
             },
             shape = RoundedCornerShape(12.dp),
@@ -977,6 +1007,45 @@ private fun ExpectedZoneInputBox(
             modifier = Modifier
                 .fillMaxWidth()
                 .testTag("expected_zones_row_$serialNumber")
+        )
+    }
+
+    if (showZonePicker) {
+        AlertDialog(
+            onDismissRequest = { showZonePicker = false },
+            title = { Text("Add Vastu Zone") },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .heightIn(max = 380.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    VastuConstants.sixteenVastuZones.forEach { zone ->
+                        Surface(
+                            onClick = {
+                                val updated = if (value.isBlank()) zone else "$value, $zone"
+                                onValueChange(updated)
+                                showZonePicker = false
+                            },
+                            shape = RoundedCornerShape(10.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = zone,
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showZonePicker = false }) {
+                    Text("Close")
+                }
+            }
         )
     }
 }

@@ -128,7 +128,6 @@ object WorkspaceRenderer {
             VastuChakraType.DEVTA_45_MANDALA -> drawDevta45MandalaBitmap(canvas, width, height, rotationDeg)
             VastuChakraType.PANCH_TATVA_CYCLE -> drawPanchTatvaCycleBitmap(canvas, width, height, rotationDeg)
             VastuChakraType.MAIN_DOOR_32 -> drawMainDoor32Bitmap(canvas, width, height, rotationDeg)
-            VastuChakraType.PANCH_TATVA_COMPASS -> drawPanchTatvaCompassBitmap(canvas, width, height, rotationDeg)
         }
     }
 
@@ -692,88 +691,6 @@ object WorkspaceRenderer {
         }
     }
 
-    private fun drawPanchTatvaCompassBitmap(
-        canvas: Canvas,
-        width: Float,
-        height: Float,
-        rotationDeg: Float
-    ) {
-        val cx = width / 2f
-        val cy = height / 2f
-        val radius = min(width, height) * 0.45f
-        if (radius < 40f) return
-
-        val rOuter = radius * 0.98f
-        val rRingOuter = radius * 0.87f
-        val rRingInner = radius * 0.69f
-        val rCenter = radius * 0.19f
-        val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
-        val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
-        val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            textAlign = Paint.Align.CENTER
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-        }
-
-        canvas.withRotation(rotationDeg, cx, cy) {
-            val sweepColors = intArrayOf(
-                Color.argb(215, 94, 179, 126),
-                Color.argb(215, 217, 74, 62),
-                Color.argb(215, 234, 212, 56),
-                Color.argb(215, 223, 228, 232),
-                Color.argb(215, 62, 131, 196),
-                Color.argb(215, 94, 179, 126)
-            )
-            val sweepPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                style = Paint.Style.STROKE
-                strokeWidth = rRingOuter - rRingInner
-                shader = android.graphics.SweepGradient(cx, cy, sweepColors, floatArrayOf(0f, 0.18f, 0.36f, 0.54f, 0.75f, 1f))
-            }
-            drawCircle(cx, cy, (rRingInner + rRingOuter) / 2f, sweepPaint)
-            strokePaint.color = Color.rgb(31, 36, 33)
-            strokePaint.strokeWidth = 2.5f
-            drawCircle(cx, cy, rRingOuter, strokePaint)
-            drawCircle(cx, cy, rRingInner, strokePaint)
-
-            val ringMid = (rRingInner + rRingOuter) / 2f
-            listOf(35f to "Water", 128f to "Fire", 222f to "Earth", 310f to "Air").forEach { (deg, name) ->
-                drawBitmapRadialLabel(this, name, deg, ringMid, cx, cy, (radius * 0.052f).coerceAtLeast(12f), Color.rgb(20, 24, 21), textPaint)
-            }
-            listOf(0f to "N", 90f to "E", 180f to "S", 270f to "W").forEach { (deg, d) ->
-                drawBitmapRadialLabel(this, d, deg, ringMid, cx, cy, (radius * 0.065f).coerceAtLeast(14f), if (d == "N") Color.rgb(211, 47, 47) else Color.rgb(20, 24, 21), textPaint)
-            }
-
-            drawBitmapOuter360Scale(this, cx, cy, rOuter, rRingOuter, (rOuter + rRingOuter) / 2f, radius, 2.5f, 1.2f, strokePaint, textPaint)
-
-            val needleR = rRingInner * 0.88f
-            val baseHalf = rCenter * 0.34f
-            val nPath = Path().apply {
-                moveTo(cx, cy - needleR)
-                lineTo(cx + baseHalf, cy)
-                lineTo(cx - baseHalf, cy)
-                close()
-            }
-            fillPaint.color = Color.rgb(211, 47, 47)
-            drawPath(nPath, fillPaint)
-            fillPaint.color = Color.rgb(26, 58, 84)
-            listOf(90f, 180f, 270f).forEach { rot ->
-                withRotation(rot, cx, cy) {
-                    val p = Path().apply {
-                        moveTo(cx, cy - needleR * 0.88f)
-                        lineTo(cx + baseHalf, cy)
-                        lineTo(cx - baseHalf, cy)
-                        close()
-                    }
-                    drawPath(p, fillPaint)
-                }
-            }
-            fillPaint.color = Color.argb(238, 253, 251, 246)
-            drawCircle(cx, cy, rCenter, fillPaint)
-            drawCircle(cx, cy, rCenter, strokePaint)
-            textPaint.color = Color.rgb(20, 24, 21)
-            textPaint.textSize = (radius * 0.050f).coerceAtLeast(13f)
-            drawText("Ether", cx, cy - (textPaint.descent() + textPaint.ascent()) / 2f, textPaint)
-        }
-    }
 
     private fun drawBitmapRadialLabel(
         canvas: Canvas,
