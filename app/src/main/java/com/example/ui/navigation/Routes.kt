@@ -47,3 +47,15 @@ data class PhotoViewerRoute(
 data class LayoutWorkspaceRoute(
     val mediaId: String
 )
+
+@Serializable
+data class MapCompassAlignRoute(
+    val reportId: String,
+    val initialChakraType: String = "SHAKTI_16_32"
+)
+
+@Serializable
+data class LayoutBuilderRoute(
+    val reportId: String,
+    val mediaId: String? = null
+)

@@ -64,7 +64,9 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import androidx.compose.material.icons.filled.Straighten
 import com.example.data.local.FullReportBundle
+import com.example.data.local.JsonCodec
 import com.example.data.local.SiteMediaEntity
 import com.example.model.MediaKind
 import com.example.model.VastuConstants
@@ -217,7 +219,8 @@ fun SiteDrawingsAndWorkspaceSection(
     onUpdateDrawing: (SiteMediaEntity) -> Unit,
     onMarkMainLayout: (SiteMediaEntity) -> Unit,
     onMoveOrder: (SiteMediaEntity, Boolean) -> Unit,
-    onDeleteDrawing: (SiteMediaEntity) -> Unit
+    onDeleteDrawing: (SiteMediaEntity) -> Unit,
+    onOpenLayoutBuilder: (String?) -> Unit = {}
 ) {
     var showAddDialog by remember { mutableStateOf(false) }
     var editingDrawing by remember { mutableStateOf<SiteMediaEntity?>(null) }
@@ -249,7 +252,7 @@ fun SiteDrawingsAndWorkspaceSection(
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         VedicraSectionCard(
             title = "SITE DRAWINGS & LAYOUTS",
-            subtitle = "Organize plot plans, floor layouts & open the Site Grid & Layout Workspace",
+            subtitle = "Create scaled plot plans, organize floor layouts & overlay Vastu Chakras",
             icon = Icons.Filled.Draw,
             headerTrailing = {
                 PrimaryDarkGreenButton(
@@ -261,25 +264,41 @@ fun SiteDrawingsAndWorkspaceSection(
             }
         ) {
             Text(
-                text = "Tap 'Open Grid & Layout Workspace' on any floor plan to add N/NE/E/SE/S/SW/W/NW markers, North arrow, degree/room/zone labels and notes on a copy while keeping the original image untouched.",
+                text = "Tap 'Draw Scaled Layout' to enter N/E/S/W & Top/Bottom/Left/Right dimensions, draw walls, place Rooms/Machines/Toilets/Entrances & tilt any Vastu Chakra.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            OutlinedButton(
+                onClick = { onOpenLayoutBuilder(null) },
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+                    .testTag("open_layout_builder_button")
+            ) {
+                Icon(Icons.Filled.Straighten, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Draw Scaled Layout & Place Rooms / Chakra")
+            }
         }
 
         if (drawings.isEmpty()) {
             EmptyMediaHintCard(
                 title = "No Site Drawings Added",
-                subtitle = "Use 'Add Drawing' to capture or import floor plans, plot layouts, machinery layouts, or electrical plans."
+                subtitle = "Use 'Draw Scaled Layout' or 'Add Drawing' to capture or import floor plans, plot layouts, or machinery layouts."
             )
         } else {
             drawings.forEachIndexed { idx, drawing ->
+                val isScaledPlan = remember(drawing.annotationsJson) {
+                    JsonCodec.decodeWorkspaceMetadata(drawing.annotationsJson).customLayoutPlan != null
+                }
                 MediaItemCard(
                     media = drawing,
                     isFirst = idx == 0,
                     isLast = idx == drawings.lastIndex,
                     onOpenViewer = { onOpenViewer(drawing.id) },
                     onOpenWorkspace = { onOpenWorkspace(drawing.id) },
+                    onEditScaledLayout = if (isScaledPlan) ({ onOpenLayoutBuilder(drawing.id) }) else null,
                     onRotate = { onRotateDrawing(drawing) },
                     onEditDetails = { editingDrawing = drawing },
                     onTogglePdf = { onUpdateDrawing(drawing.copy(includeInPdf = !drawing.includeInPdf)) },
@@ -478,6 +497,7 @@ private fun MediaItemCard(
     isLast: Boolean,
     onOpenViewer: () -> Unit,
     onOpenWorkspace: () -> Unit,
+    onEditScaledLayout: (() -> Unit)? = null,
     onRotate: () -> Unit,
     onEditDetails: () -> Unit,
     onTogglePdf: () -> Unit,
@@ -647,7 +667,18 @@ private fun MediaItemCard(
                 ) {
                     Icon(Icons.Filled.GridOn, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text("Grid & Annotate", style = MaterialTheme.typography.labelMedium)
+                    Text("Grid & Crop", style = MaterialTheme.typography.labelMedium)
+                }
+                if (onEditScaledLayout != null) {
+                    OutlinedButton(
+                        onClick = onEditScaledLayout,
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.weight(1f).height(42.dp)
+                    ) {
+                        Icon(Icons.Filled.Straighten, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Edit Layout", style = MaterialTheme.typography.labelMedium)
+                    }
                 }
                 OutlinedButton(
                     onClick = onOpenViewer,
@@ -656,7 +687,7 @@ private fun MediaItemCard(
                 ) {
                     Icon(Icons.Filled.ZoomIn, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text("Full Screen", style = MaterialTheme.typography.labelMedium)
+                    Text("View", style = MaterialTheme.typography.labelMedium)
                 }
             }
 

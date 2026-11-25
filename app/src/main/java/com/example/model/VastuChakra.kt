@@ -2,6 +2,7 @@ package com.example.model
 
 import android.hardware.SensorManager
 import android.view.Surface
+import kotlinx.serialization.Serializable
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.acos
@@ -12,6 +13,39 @@ import kotlin.math.hypot
 import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.sqrt
+
+@Serializable
+enum class VastuChakraType(
+    val displayName: String,
+    val shortName: String,
+    val subtitle: String
+) {
+    SHAKTI_16_32(
+        displayName = "Shakti Chakra (16 Zones)",
+        shortName = "Shakti Chakra",
+        subtitle = "16 Zones • 32 Padas • 0° North strictly between N4 & N5"
+    ),
+    DEVTA_45_MANDALA(
+        displayName = "45 Devta Mandala",
+        shortName = "45 Devta",
+        subtitle = "Brahma + 12 Inner Devas + 32 Padas + Body Organs & Gunas"
+    ),
+    PANCH_TATVA_CYCLE(
+        displayName = "Panch Tatva Cycle",
+        shortName = "Panch Tatva",
+        subtitle = "5 Elements • Clockwise Support & 5-Point Oppose Star"
+    ),
+    MAIN_DOOR_32(
+        displayName = "Main Door Chakra (✓/✗)",
+        shortName = "Main Door ✓/✗",
+        subtitle = "32 Radial Padas • Auspicious ✓ & Inauspicious ✗ Entrances"
+    ),
+    PANCH_TATVA_COMPASS(
+        displayName = "Panch Tatva Compass Dial",
+        shortName = "Tatva Dial",
+        subtitle = "Ether Center • Water, Air, Fire & Earth Gradient Ring"
+    )
+}
 
 enum class VastuElement(
     val label: String,
@@ -58,7 +92,35 @@ data class VastuPada(
     val startDegree: Float,
     val endDegree: Float,
     val isAuspicious: Boolean,
-    val element: VastuElement
+    val element: VastuElement,
+    val padaNumber45: Int = 14,
+    val directionGroup: String = "North",
+    val entranceEffect: String = ""
+) {
+    val midDegree: Float
+        get() = (startDegree + endDegree) / 2f
+
+    val signSymbol: String
+        get() = if (isAuspicious) "+" else "-"
+}
+
+data class VastuInnerDevta(
+    val devtaNumber: Int,
+    val name: String,
+    val ringLayer: Int, // 1 = Brahma center, 2 = 4 cardinal inner, 3 = 8 corner intermediate
+    val startDegree: Float,
+    val sweepDegree: Float,
+    val fillColorArgb: Long
+) {
+    val midDegree: Float
+        get() = startDegree + sweepDegree / 2f
+}
+
+data class VastuOrganGunaSegment(
+    val label: String,
+    val startDegree: Float,
+    val endDegree: Float,
+    val isGunaBand: Boolean = false
 ) {
     val midDegree: Float
         get() = (startDegree + endDegree) / 2f
@@ -92,6 +154,7 @@ data class CompassReading(
     val tiltFromLevelDeg: Float = 0f,
     val isLevel: Boolean = true,
     val isUprightCameraMode: Boolean = false,
+    val magneticFieldMicroTesla: Float = 0f,
     val zone: VastuZone16 = VastuChakraSpec.zones16.first(),
     val pada: VastuPada = VastuChakraSpec.padas32.first(),
     val accuracy: CompassAccuracy = CompassAccuracy.MANUAL,
@@ -108,46 +171,220 @@ object VastuChakraSpec {
      */
     val padas32: List<VastuPada> = listOf(
         // North (0° starts N5; 360° ends N4)
-        VastuPada(0, "N5", "Soma", 0.00f, 11.25f, true, VastuElement.WATER),
-        VastuPada(1, "N6", "Bhujag", 11.25f, 22.50f, false, VastuElement.WATER),
-        VastuPada(2, "N7", "Aditi", 22.50f, 33.75f, false, VastuElement.WATER),
-        VastuPada(3, "N8", "Diti", 33.75f, 45.00f, false, VastuElement.WATER),
+        VastuPada(
+            index = 0, code = "N5", deity = "Soma", startDegree = 0.00f, endDegree = 11.25f,
+            isAuspicious = true, element = VastuElement.WATER, padaNumber45 = 42, directionGroup = "North",
+            entranceEffect = "Religious, calm and non-aggressive mindset; supports peaceful spiritual and steady household growth."
+        ),
+        VastuPada(
+            index = 1, code = "N6", deity = "Bhujag", startDegree = 11.25f, endDegree = 22.50f,
+            isAuspicious = false, element = VastuElement.WATER, padaNumber45 = 43, directionGroup = "North",
+            entranceEffect = "Unacceptable behaviour in society and people usually avoid listening to residents."
+        ),
+        VastuPada(
+            index = 2, code = "N7", deity = "Aditi", startDegree = 22.50f, endDegree = 33.75f,
+            isAuspicious = false, element = VastuElement.WATER, padaNumber45 = 44, directionGroup = "North",
+            entranceEffect = "Girls in family tend to go beyond traditional family culture."
+        ),
+        VastuPada(
+            index = 3, code = "N8", deity = "Diti", startDegree = 33.75f, endDegree = 45.00f,
+            isAuspicious = false, element = VastuElement.WATER, padaNumber45 = 45, directionGroup = "North",
+            entranceEffect = "Gives high bank balance and strong financial accumulation."
+        ),
 
         // East (45°..135°)
-        VastuPada(4, "E1", "Shikhi", 45.00f, 56.25f, false, VastuElement.AIR),
-        VastuPada(5, "E2", "Parjanya", 56.25f, 67.50f, false, VastuElement.AIR),
-        VastuPada(6, "E3", "Jayant", 67.50f, 78.75f, true, VastuElement.AIR),
-        VastuPada(7, "E4", "Indra", 78.75f, 90.00f, true, VastuElement.AIR),
-        VastuPada(8, "E5", "Surya", 90.00f, 101.25f, false, VastuElement.AIR),
-        VastuPada(9, "E6", "Satya", 101.25f, 112.50f, false, VastuElement.AIR),
-        VastuPada(10, "E7", "Bhrisha", 112.50f, 123.75f, false, VastuElement.AIR),
-        VastuPada(11, "E8", "Akash", 123.75f, 135.00f, false, VastuElement.FIRE),
+        VastuPada(
+            index = 4, code = "E1", deity = "Shikhi", startDegree = 45.00f, endDegree = 56.25f,
+            isAuspicious = false, element = VastuElement.AIR, padaNumber45 = 14, directionGroup = "East",
+            entranceEffect = "Causes fire hazards, accidents and unexpected losses."
+        ),
+        VastuPada(
+            index = 5, code = "E2", deity = "Parjanya", startDegree = 56.25f, endDegree = 67.50f,
+            isAuspicious = false, element = VastuElement.AIR, padaNumber45 = 15, directionGroup = "East",
+            entranceEffect = "Wasteful expenditure and number of girls are more in family."
+        ),
+        VastuPada(
+            index = 6, code = "E3", deity = "Jayant", startDegree = 67.50f, endDegree = 78.75f,
+            isAuspicious = true, element = VastuElement.AIR, padaNumber45 = 16, directionGroup = "East",
+            entranceEffect = "Auspicious entrance that brings money, business profit and consistent success."
+        ),
+        VastuPada(
+            index = 7, code = "E4", deity = "Indra", startDegree = 78.75f, endDegree = 90.00f,
+            isAuspicious = true, element = VastuElement.AIR, padaNumber45 = 17, directionGroup = "East",
+            entranceEffect = "Builds strong connections and growth with powerful people in government departments."
+        ),
+        VastuPada(
+            index = 8, code = "E5", deity = "Surya", startDegree = 90.00f, endDegree = 101.25f,
+            isAuspicious = false, element = VastuElement.AIR, padaNumber45 = 18, directionGroup = "East",
+            entranceEffect = "Creates extreme short temperament and quick anger among residents."
+        ),
+        VastuPada(
+            index = 9, code = "E6", deity = "Satya", startDegree = 101.25f, endDegree = 112.50f,
+            isAuspicious = false, element = VastuElement.AIR, padaNumber45 = 19, directionGroup = "East",
+            entranceEffect = "Non-commitments and unreliability of residents."
+        ),
+        VastuPada(
+            index = 10, code = "E7", deity = "Bhrisha", startDegree = 112.50f, endDegree = 123.75f,
+            isAuspicious = false, element = VastuElement.AIR, padaNumber45 = 20, directionGroup = "East",
+            entranceEffect = "Insensitive towards problems and discomfort of others."
+        ),
+        VastuPada(
+            index = 11, code = "E8", deity = "Akash", startDegree = 123.75f, endDegree = 135.00f,
+            isAuspicious = false, element = VastuElement.FIRE, padaNumber45 = 21, directionGroup = "East",
+            entranceEffect = "Results in accidents, burglary and unexpected financial losses."
+        ),
 
         // South (135°..225°)
-        VastuPada(12, "S1", "Anil", 135.00f, 146.25f, false, VastuElement.FIRE),
-        VastuPada(13, "S2", "Pusha", 146.25f, 157.50f, false, VastuElement.FIRE),
-        VastuPada(14, "S3", "Vitatha", 157.50f, 168.75f, true, VastuElement.FIRE),
-        VastuPada(15, "S4", "Grihakshat", 168.75f, 180.00f, true, VastuElement.FIRE),
-        VastuPada(16, "S5", "Yama", 180.00f, 191.25f, false, VastuElement.FIRE),
-        VastuPada(17, "S6", "Gandharv", 191.25f, 202.50f, false, VastuElement.EARTH),
-        VastuPada(18, "S7", "Bhringraj", 202.50f, 213.75f, false, VastuElement.EARTH),
-        VastuPada(19, "S8", "Mrigha", 213.75f, 225.00f, false, VastuElement.EARTH),
+        VastuPada(
+            index = 12, code = "S1", deity = "Anil", startDegree = 135.00f, endDegree = 146.25f,
+            isAuspicious = false, element = VastuElement.FIRE, padaNumber45 = 22, directionGroup = "South",
+            entranceEffect = "Affects boys in house negatively; actions and thoughts go beyond parents' expectations."
+        ),
+        VastuPada(
+            index = 13, code = "S2", deity = "Pusha", startDegree = 146.25f, endDegree = 157.50f,
+            isAuspicious = false, element = VastuElement.FIRE, padaNumber45 = 23, directionGroup = "South",
+            entranceEffect = "Increases tendency to work for others; supportive for professionals working in MNCs and corporates."
+        ),
+        VastuPada(
+            index = 14, code = "S3", deity = "Vitatha", startDegree = 157.50f, endDegree = 168.75f,
+            isAuspicious = true, element = VastuElement.FIRE, padaNumber45 = 24, directionGroup = "South",
+            entranceEffect = "Brings immense prosperity and makes residents smart enough to get their work done."
+        ),
+        VastuPada(
+            index = 15, code = "S4", deity = "Grihakshat", startDegree = 168.75f, endDegree = 180.00f,
+            isAuspicious = true, element = VastuElement.FIRE, padaNumber45 = 25, directionGroup = "South",
+            entranceEffect = "Industries are highly successful and the family is blessed with more boys in house."
+        ),
+        VastuPada(
+            index = 16, code = "S5", deity = "Yama", startDegree = 180.00f, endDegree = 191.25f,
+            isAuspicious = false, element = VastuElement.FIRE, padaNumber45 = 26, directionGroup = "South",
+            entranceEffect = "People live with high debts and feel they are not making good use of their skills."
+        ),
+        VastuPada(
+            index = 17, code = "S6", deity = "Gandharv", startDegree = 191.25f, endDegree = 202.50f,
+            isAuspicious = false, element = VastuElement.EARTH, padaNumber45 = 27, directionGroup = "South",
+            entranceEffect = "Door brings poverty and severe financial drain in the house."
+        ),
+        VastuPada(
+            index = 18, code = "S7", deity = "Bhringraj", startDegree = 202.50f, endDegree = 213.75f,
+            isAuspicious = false, element = VastuElement.EARTH, padaNumber45 = 28, directionGroup = "South",
+            entranceEffect = "Professional and relationship efforts go in waste; people feel disconnected from others."
+        ),
+        VastuPada(
+            index = 19, code = "S8", deity = "Mrigha", startDegree = 213.75f, endDegree = 225.00f,
+            isAuspicious = false, element = VastuElement.EARTH, padaNumber45 = 29, directionGroup = "South",
+            entranceEffect = "Extreme rude and attitude behaviours disconnecting from rest of the world, leading to financial and relationship hardships."
+        ),
 
         // West (225°..315°)
-        VastuPada(20, "W1", "Pitra", 225.00f, 236.25f, false, VastuElement.EARTH),
-        VastuPada(21, "W2", "Dauwarik", 236.25f, 247.50f, false, VastuElement.EARTH),
-        VastuPada(22, "W3", "Sugreev", 247.50f, 258.75f, true, VastuElement.SPACE),
-        VastuPada(23, "W4", "Puspdant", 258.75f, 270.00f, true, VastuElement.SPACE),
-        VastuPada(24, "W5", "Varun", 270.00f, 281.25f, true, VastuElement.SPACE),
-        VastuPada(25, "W6", "Asur", 281.25f, 292.50f, false, VastuElement.SPACE),
-        VastuPada(26, "W7", "Shosha", 292.50f, 303.75f, false, VastuElement.SPACE),
-        VastuPada(27, "W8", "Papyashma", 303.75f, 315.00f, false, VastuElement.SPACE),
+        VastuPada(
+            index = 20, code = "W1", deity = "Pitra", startDegree = 225.00f, endDegree = 236.25f,
+            isAuspicious = false, element = VastuElement.EARTH, padaNumber45 = 30, directionGroup = "West",
+            entranceEffect = "Negativity of entrance affects financial position and overall life span."
+        ),
+        VastuPada(
+            index = 21, code = "W2", deity = "Dauwarik", startDegree = 236.25f, endDegree = 247.50f,
+            isAuspicious = false, element = VastuElement.EARTH, padaNumber45 = 31, directionGroup = "West",
+            entranceEffect = "Unstable career, feeling insecure in life, and lack of clarity and vision."
+        ),
+        VastuPada(
+            index = 22, code = "W3", deity = "Sugreev", startDegree = 247.50f, endDegree = 258.75f,
+            isAuspicious = true, element = VastuElement.SPACE, padaNumber45 = 32, directionGroup = "West",
+            entranceEffect = "Amazing growth and prosperity across work and family life."
+        ),
+        VastuPada(
+            index = 23, code = "W4", deity = "Puspdant", startDegree = 258.75f, endDegree = 270.00f,
+            isAuspicious = true, element = VastuElement.SPACE, padaNumber45 = 33, directionGroup = "West",
+            entranceEffect = "Balanced and smooth life — neither excessive profits nor heavy losses."
+        ),
+        VastuPada(
+            index = 24, code = "W5", deity = "Varun", startDegree = 270.00f, endDegree = 281.25f,
+            isAuspicious = true, element = VastuElement.SPACE, padaNumber45 = 34, directionGroup = "West",
+            entranceEffect = "Makes one perfectionist and overambitious which can lead to problems in life."
+        ),
+        VastuPada(
+            index = 25, code = "W6", deity = "Asur", startDegree = 281.25f, endDegree = 292.50f,
+            isAuspicious = false, element = VastuElement.SPACE, padaNumber45 = 35, directionGroup = "West",
+            entranceEffect = "Brings mental depression and emotional heaviness."
+        ),
+        VastuPada(
+            index = 26, code = "W7", deity = "Shosha", startDegree = 292.50f, endDegree = 303.75f,
+            isAuspicious = false, element = VastuElement.SPACE, padaNumber45 = 36, directionGroup = "West",
+            entranceEffect = "Induces addiction tendencies (drugs/alcohol) and loss of general happiness."
+        ),
+        VastuPada(
+            index = 27, code = "W8", deity = "Papyashma", startDegree = 303.75f, endDegree = 315.00f,
+            isAuspicious = false, element = VastuElement.SPACE, padaNumber45 = 37, directionGroup = "West",
+            entranceEffect = "Encourages unfair and unlawful means for personal benefit."
+        ),
 
         // North-West back to North 0° (315°..360°)
-        VastuPada(28, "N1", "Roga", 315.00f, 326.25f, false, VastuElement.WATER),
-        VastuPada(29, "N2", "Naga", 326.25f, 337.50f, false, VastuElement.WATER),
-        VastuPada(30, "N3", "Mukhya", 337.50f, 348.75f, true, VastuElement.WATER),
-        VastuPada(31, "N4", "Bhallat", 348.75f, 360.00f, true, VastuElement.WATER)
+        VastuPada(
+            index = 28, code = "N1", deity = "Roga", startDegree = 315.00f, endDegree = 326.25f,
+            isAuspicious = false, element = VastuElement.WATER, padaNumber45 = 38, directionGroup = "North",
+            entranceEffect = "Residents in house are affected by bad intentions and ill will of other people."
+        ),
+        VastuPada(
+            index = 29, code = "N2", deity = "Naga", startDegree = 326.25f, endDegree = 337.50f,
+            isAuspicious = false, element = VastuElement.WATER, padaNumber45 = 39, directionGroup = "North",
+            entranceEffect = "Residents constantly feel that other people are jealous of them."
+        ),
+        VastuPada(
+            index = 30, code = "N3", deity = "Mukhya", startDegree = 337.50f, endDegree = 348.75f,
+            isAuspicious = true, element = VastuElement.WATER, padaNumber45 = 40, directionGroup = "North",
+            entranceEffect = "Auspicious entrance bringing continuous inflow of lot of money."
+        ),
+        VastuPada(
+            index = 31, code = "N4", deity = "Bhallat", startDegree = 348.75f, endDegree = 360.00f,
+            isAuspicious = true, element = VastuElement.WATER, padaNumber45 = 41, directionGroup = "North",
+            entranceEffect = "Gain from ancestors' property and steady earning of money."
+        )
+    )
+
+    val padasNorthToWestOrder: List<VastuPada> = listOf("N", "E", "S", "W").flatMap { dirPrefix ->
+        (1..8).map { num -> padas32.first { it.code == "$dirPrefix$num" } }
+    }
+
+    /**
+     * Inner 13 Devtas of the 45-Devta Mandala (Brahma #1 + 4 cardinal inner #2..#5 + 8 corner #6..#13).
+     */
+    val innerDevtas13: List<VastuInnerDevta> = listOf(
+        VastuInnerDevta(1, "Brahma", 1, 0f, 360f, 0xFFF7E55C),
+        // Layer 2: 4 Cardinal Inner Devtas (each spans 45° centered at 0°, 90°, 180°, 270°)
+        VastuInnerDevta(2, "Bhudhar", 2, 337.5f, 45f, 0xFF1F7AC0),
+        VastuInnerDevta(3, "Aryama", 2, 67.5f, 45f, 0xFFF5DE3A),
+        VastuInnerDevta(4, "Viviswan", 2, 157.5f, 45f, 0xFFE3352D),
+        VastuInnerDevta(5, "Mitra", 2, 247.5f, 45f, 0xFFE3352D),
+        // Layer 3: 8 Intermediate Corner Devtas (each spans 22.5°)
+        VastuInnerDevta(6, "Aapaha", 3, 22.5f, 22.5f, 0xFFE3352D),
+        VastuInnerDevta(7, "Aapaha\nVatsa", 3, 45.0f, 22.5f, 0xFFE3352D),
+        VastuInnerDevta(8, "Savita", 3, 112.5f, 22.5f, 0xFF1F7AC0),
+        VastuInnerDevta(9, "Savitra", 3, 135.0f, 22.5f, 0xFFE3352D),
+        VastuInnerDevta(10, "Indra", 3, 202.5f, 22.5f, 0xFF1F7AC0),
+        VastuInnerDevta(11, "Jaya", 3, 225.0f, 22.5f, 0xFFE3352D),
+        VastuInnerDevta(12, "Rudra", 3, 292.5f, 22.5f, 0xFF1F7AC0),
+        VastuInnerDevta(13, "Rajya\nKshma", 3, 315.0f, 22.5f, 0xFF1F7AC0)
+    )
+
+    /**
+     * Body organs & Tri-Guna band paired around the 45-Devta Mandala chart.
+     */
+    val organGunaSegments: List<VastuOrganGunaSegment> = listOf(
+        VastuOrganGunaSegment("Bladder", 337.5f, 360f),
+        VastuOrganGunaSegment("Kidney", 0f, 22.5f),
+        VastuOrganGunaSegment("TAMAS", 22.5f, 33.75f, isGunaBand = true),
+        VastuOrganGunaSegment("Pericardium", 33.75f, 56.25f),
+        VastuOrganGunaSegment("Circulation", 56.25f, 90f),
+        VastuOrganGunaSegment("Liver", 90f, 118f),
+        VastuOrganGunaSegment("Gall Bladder", 118f, 140f),
+        VastuOrganGunaSegment("RAJAS", 140f, 152f, isGunaBand = true),
+        VastuOrganGunaSegment("Spleen", 152f, 180f),
+        VastuOrganGunaSegment("Stomach", 180f, 213.75f),
+        VastuOrganGunaSegment("Heart", 213.75f, 236.25f),
+        VastuOrganGunaSegment("Lung", 236.25f, 258.75f),
+        VastuOrganGunaSegment("SATTAV", 258.75f, 275f, isGunaBand = true),
+        VastuOrganGunaSegment("Colon", 275f, 303.75f),
+        VastuOrganGunaSegment("Small Intestine", 303.75f, 337.5f)
     )
 
     /**
@@ -180,6 +417,16 @@ object VastuCompassMath {
         if (deg.isNaN() || deg.isInfinite()) return 0f
         val rem = deg % 360f
         return if (rem < 0f) rem + 360f else rem
+    }
+
+    fun parseManualDegrees(raw: String): Float? {
+        val cleaned = raw.trim()
+            .replace("°", "")
+            .replace(',', '.')
+        if (cleaned.isEmpty()) return null
+        val match = Regex("[-+]?\\d+(?:\\.\\d+)?").find(cleaned) ?: return null
+        val parsed = match.value.toFloatOrNull() ?: return null
+        return normalizeDegrees(parsed)
     }
 
     fun padaForDegree(deg: Float): VastuPada {
@@ -236,9 +483,29 @@ object VastuCompassMath {
     }
 
     /**
-     * Computes magnetic heading & physical tilt angles from raw accelerometer (m/s^2) and
-     * magnetometer (uT) vectors. Handles both flat tabletop floor-plan alignment and upright
-     * camera framing smoothly without gimbal lock.
+     * Given a normalized point (xNorm, yNorm) in a layout/plan relative to the chakra center
+     * (centerXNorm, centerYNorm) and the chakra's screen rotation in degrees (`chakraRotationDeg`,
+     * where positive rotates clockwise so 0° North sits at `chakraRotationDeg`), returns the
+     * exact Vastu degrees, 16-Zone, and 32-Pada at that position.
+     */
+    fun analyzePlanPosition(
+        xNorm: Float,
+        yNorm: Float,
+        centerXNorm: Float = 0.5f,
+        centerYNorm: Float = 0.5f,
+        chakraRotationDeg: Float = 0f
+    ): Triple<Float, VastuZone16, VastuPada> {
+        val dx = xNorm - centerXNorm
+        val dy = yNorm - centerYNorm
+        // Screen angle clockwise from top (12 o'clock = 0°)
+        val screenClockDeg = normalizeDegrees(Math.toDegrees(atan2(dx.toDouble(), (-dy).toDouble())).toFloat())
+        val vastuDeg = normalizeDegrees(screenClockDeg - chakraRotationDeg)
+        return Triple(vastuDeg, zoneForDegree(vastuDeg), padaForDegree(vastuDeg))
+    }
+
+    /**
+     * Computes magnetic heading, physical tilt angles & raw geomagnetic field strength (uT)
+     * from raw accelerometer (m/s^2) and magnetometer (uT) vectors.
      */
     fun computeOrientationFromVectors(
         accel: FloatArray,
@@ -253,6 +520,8 @@ object VastuCompassMath {
         val gx = accel[0] / gMag
         val gy = accel[1] / gMag
         val gz = accel[2] / gMag
+
+        val magnetMicroTesla = sqrt(magnet[0] * magnet[0] + magnet[1] * magnet[1] + magnet[2] * magnet[2])
 
         // Pitch: 0° when lying flat face-up, +90° when vertical upright
         val pitchRad = asin(gy.coerceIn(-1f, 1f).toDouble())
@@ -279,7 +548,6 @@ object VastuCompassMath {
         val rawAzimuth = if (success) {
             val remapped = FloatArray(9)
             if (uprightCameraMode) {
-                // Camera aiming mode: align azimuth along the back camera (-Z) optical axis
                 when (displayRotation) {
                     Surface.ROTATION_90 -> SensorManager.remapCoordinateSystem(
                         rotationMatrix,
@@ -345,6 +613,7 @@ object VastuCompassMath {
             tiltFromLevelDeg = tiltFromFlatDeg,
             isLevel = isLevel,
             isUprightCameraMode = uprightCameraMode,
+            magneticFieldMicroTesla = magnetMicroTesla,
             zone = zoneForDegree(smoothedAzimuth),
             pada = padaForDegree(smoothedAzimuth),
             accuracy = accuracy,

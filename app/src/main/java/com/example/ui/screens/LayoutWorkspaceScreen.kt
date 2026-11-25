@@ -98,17 +98,25 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.material.icons.filled.Crop
+import androidx.compose.material.icons.filled.Brush
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import com.example.model.AnnotationType
+import com.example.model.EraseBrushStroke
+import com.example.model.EraseStrokePoint
 import com.example.model.GridOverlayStyle
 import com.example.model.LayoutAnnotation
 import com.example.model.VastuCompassMath
 import com.example.model.VastuConstants
 import com.example.pdf.PdfShareHelper
 import com.example.sensor.rememberVastuCompassState
+import com.example.ui.components.ChakraTypeSelectorRow
 import com.example.ui.components.ConfirmActionDialog
+import com.example.ui.components.ManualDegreeInputControl
 import com.example.ui.components.PrimaryDarkGreenButton
 import com.example.ui.components.VedicraTextField
-import com.example.ui.components.drawVastuChakraCompose
+import com.example.ui.components.drawChakraByTypeCompose
 import com.example.ui.viewmodel.WorkspaceEvent
 import com.example.ui.viewmodel.WorkspaceViewModel
 import kotlin.math.atan2
@@ -142,7 +150,11 @@ fun LayoutWorkspaceScreen(
     var zoomScale by remember { mutableFloatStateOf(1f) }
     var panOffset by remember { mutableStateOf(Offset.Zero) }
     var panMode by remember { mutableStateOf(false) }
+    var cleanCropMode by remember { mutableStateOf(false) }
     var activeColorHex by remember { mutableLongStateOf(0xFF1B4D3E) }
+    var activeEraseColorHex by remember { mutableLongStateOf(0xFFFFFFFF) }
+    var eraseBrushRadiusNorm by remember { mutableFloatStateOf(0.028f) }
+    var activeStrokePoints by remember { mutableStateOf<List<EraseStrokePoint>>(emptyList()) }
 
     var showDirPickerDialog by remember { mutableStateOf(false) }
     var showRoomPickerDialog by remember { mutableStateOf(false) }
@@ -227,7 +239,12 @@ fun LayoutWorkspaceScreen(
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     if (meta.showGridOverlay) {
-                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            ChakraTypeSelectorRow(
+                                selectedType = meta.chakraType,
+                                onSelectType = { viewModel.setChakraType(it) },
+                                tagPrefix = "workspace_chakra"
+                            )
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -241,24 +258,7 @@ fun LayoutWorkspaceScreen(
                                         modifier = Modifier.testTag("workspace_style_${style.name.lowercase()}")
                                     )
                                 }
-                            }
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                val normRot = VastuCompassMath.normalizeDegrees(meta.gridRotationDegrees)
-                                Text(
-                                    text = "Tilt: ${String.format(Locale.US, "%.1f", normRot)}°",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Slider(
-                                    value = meta.gridRotationDegrees,
-                                    onValueChange = { viewModel.setGridRotation(it) },
-                                    valueRange = 0f..360f,
-                                    modifier = Modifier.weight(1f)
-                                )
+                                Spacer(Modifier.weight(1f))
                                 OutlinedButton(
                                     onClick = {
                                         val aligned = VastuCompassMath.normalizeDegrees(-liveCompass.azimuthDeg)
@@ -274,6 +274,110 @@ fun LayoutWorkspaceScreen(
                                     Icon(Icons.Filled.Explore, contentDescription = null, modifier = Modifier.size(14.dp))
                                     Spacer(Modifier.width(4.dp))
                                     Text("Sync North", style = MaterialTheme.typography.labelSmall)
+                                }
+                            }
+                            ManualDegreeInputControl(
+                                degrees = meta.gridRotationDegrees,
+                                onDegreesChange = { viewModel.setGridRotation(it) },
+                                label = "Manual Grid / Chakra Tilt",
+                                showSlider = true,
+                                tagPrefix = "workspace_tilt_degree"
+                            )
+                        }
+                    }
+
+                    if (cleanCropMode) {
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(10.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "Clean Branding / Erase & Crop Edges",
+                                        style = MaterialTheme.typography.labelLarge,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        TextButton(onClick = { viewModel.clearEraseStrokes() }) {
+                                            Text("Clear Brush", style = MaterialTheme.typography.labelSmall)
+                                        }
+                                        TextButton(onClick = { viewModel.resetCrop() }) {
+                                            Text("Reset Crop", style = MaterialTheme.typography.labelSmall)
+                                        }
+                                    }
+                                }
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text("Mask:", style = MaterialTheme.typography.labelSmall)
+                                    listOf(
+                                        0xFFFFFFFFL to "White",
+                                        0xFFFAF6EEL to "Paper",
+                                        0xFF1F2421L to "Dark"
+                                    ).forEach { (hex, title) ->
+                                        FilterChip(
+                                            selected = activeEraseColorHex == hex,
+                                            onClick = { activeEraseColorHex = hex },
+                                            label = { Text(title, style = MaterialTheme.typography.labelSmall) }
+                                        )
+                                    }
+                                    Spacer(Modifier.weight(1f))
+                                    listOf(0.015f to "S", 0.028f to "M", 0.050f to "L").forEach { (r, sz) ->
+                                        FilterChip(
+                                            selected = kotlin.math.abs(eraseBrushRadiusNorm - r) < 0.004f,
+                                            onClick = { eraseBrushRadiusNorm = r },
+                                            label = { Text(sz, style = MaterialTheme.typography.labelSmall) }
+                                        )
+                                    }
+                                }
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text("Crop L/R", style = MaterialTheme.typography.labelSmall)
+                                    Slider(
+                                        value = meta.cropLeft,
+                                        onValueChange = { viewModel.updateCropRect(it, meta.cropTop, meta.cropRight, meta.cropBottom) },
+                                        valueRange = 0f..0.45f,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    Slider(
+                                        value = meta.cropRight,
+                                        onValueChange = { viewModel.updateCropRect(meta.cropLeft, meta.cropTop, it, meta.cropBottom) },
+                                        valueRange = 0.55f..1f,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text("Crop T/B", style = MaterialTheme.typography.labelSmall)
+                                    Slider(
+                                        value = meta.cropTop,
+                                        onValueChange = { viewModel.updateCropRect(meta.cropLeft, it, meta.cropRight, meta.cropBottom) },
+                                        valueRange = 0f..0.45f,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    Slider(
+                                        value = meta.cropBottom,
+                                        onValueChange = { viewModel.updateCropRect(meta.cropLeft, meta.cropTop, meta.cropRight, it) },
+                                        valueRange = 0.55f..1f,
+                                        modifier = Modifier.weight(1f)
+                                    )
                                 }
                             }
                         }
@@ -359,16 +463,29 @@ fun LayoutWorkspaceScreen(
 
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             FilterChip(
+                                selected = cleanCropMode,
+                                onClick = {
+                                    cleanCropMode = !cleanCropMode
+                                    if (cleanCropMode) panMode = false
+                                },
+                                leadingIcon = { Icon(Icons.Filled.Crop, contentDescription = null, modifier = Modifier.size(16.dp)) },
+                                label = { Text("Clean/Crop", style = MaterialTheme.typography.labelSmall) },
+                                modifier = Modifier.testTag("workspace_clean_crop_chip")
+                            )
+                            FilterChip(
                                 selected = panMode,
-                                onClick = { panMode = !panMode },
+                                onClick = {
+                                    panMode = !panMode
+                                    if (panMode) cleanCropMode = false
+                                },
                                 leadingIcon = { Icon(Icons.Filled.PanTool, contentDescription = null, modifier = Modifier.size(16.dp)) },
-                                label = { Text(if (panMode) "Zoom/Pan" else "Annotate") }
+                                label = { Text(if (panMode) "Zoom" else "Pan", style = MaterialTheme.typography.labelSmall) }
                             )
                             FilterChip(
                                 selected = meta.showGridOverlay,
                                 onClick = { viewModel.toggleGridOverlay() },
                                 leadingIcon = { Icon(Icons.Filled.GridOn, contentDescription = null, modifier = Modifier.size(16.dp)) },
-                                label = { Text("Grid") }
+                                label = { Text("Grid", style = MaterialTheme.typography.labelSmall) }
                             )
                         }
                     }
@@ -566,10 +683,37 @@ fun LayoutWorkspaceScreen(
                         modifier = Modifier
                             .fillMaxSize()
                             .let { canvasMod ->
-                                if (panMode) {
-                                    canvasMod
-                                } else {
-                                    canvasMod
+                                when {
+                                    panMode -> canvasMod
+                                    cleanCropMode -> canvasMod.pointerInput(activeEraseColorHex, eraseBrushRadiusNorm) {
+                                        detectDragGestures(
+                                            onDragStart = { start ->
+                                                val nx = (start.x / size.width).coerceIn(0f, 1f)
+                                                val ny = (start.y / size.height).coerceIn(0f, 1f)
+                                                activeStrokePoints = listOf(EraseStrokePoint(nx, ny))
+                                            },
+                                            onDrag = { change, _ ->
+                                                change.consume()
+                                                val nx = (change.position.x / size.width).coerceIn(0f, 1f)
+                                                val ny = (change.position.y / size.height).coerceIn(0f, 1f)
+                                                activeStrokePoints = activeStrokePoints + EraseStrokePoint(nx, ny)
+                                            },
+                                            onDragEnd = {
+                                                if (activeStrokePoints.isNotEmpty()) {
+                                                    viewModel.addEraseStroke(
+                                                        EraseBrushStroke(
+                                                            points = activeStrokePoints,
+                                                            radiusNorm = eraseBrushRadiusNorm,
+                                                            colorHex = activeEraseColorHex
+                                                        )
+                                                    )
+                                                    activeStrokePoints = emptyList()
+                                                }
+                                            },
+                                            onDragCancel = { activeStrokePoints = emptyList() }
+                                        )
+                                    }
+                                    else -> canvasMod
                                         .pointerInput(meta.annotations) {
                                             detectTapGestures { offset ->
                                                 val nx = offset.x / size.width
@@ -637,10 +781,61 @@ fun LayoutWorkspaceScreen(
                                 }
                             }
                     ) {
+                        // Draw saved and in-progress Clean / Erase strokes on plan
+                        val allStrokes = if (activeStrokePoints.isNotEmpty()) {
+                            meta.eraseStrokes + EraseBrushStroke(
+                                points = activeStrokePoints,
+                                radiusNorm = eraseBrushRadiusNorm,
+                                colorHex = activeEraseColorHex
+                            )
+                        } else meta.eraseStrokes
+                        allStrokes.forEach { stroke ->
+                            if (stroke.points.isNotEmpty()) {
+                                val col = Color(stroke.colorHex)
+                                val strokePx = stroke.radiusNorm * min(size.width, size.height) * 2f
+                                if (stroke.points.size == 1) {
+                                    val pt = stroke.points.first()
+                                    drawCircle(col, radius = strokePx / 2f, center = Offset(pt.x * size.width, pt.y * size.height))
+                                } else {
+                                    val path = Path()
+                                    stroke.points.forEachIndexed { idx, pt ->
+                                        val px = pt.x * size.width
+                                        val py = pt.y * size.height
+                                        if (idx == 0) path.moveTo(px, py) else path.lineTo(px, py)
+                                    }
+                                    drawPath(
+                                        path = path,
+                                        color = col,
+                                        style = Stroke(width = strokePx, cap = StrokeCap.Round, join = StrokeJoin.Round)
+                                    )
+                                }
+                            }
+                        }
+
+                        // Draw crop preview mask if edges trimmed
+                        val hasCrop = meta.cropLeft > 0.005f || meta.cropTop > 0.005f || meta.cropRight < 0.995f || meta.cropBottom < 0.995f
+                        if (hasCrop || cleanCropMode) {
+                            val cl = meta.cropLeft * size.width
+                            val ct = meta.cropTop * size.height
+                            val cr = meta.cropRight * size.width
+                            val cb = meta.cropBottom * size.height
+                            if (cl > 0f) drawRect(Color(0x88000000), Offset.Zero, Size(cl, size.height))
+                            if (cr < size.width) drawRect(Color(0x88000000), Offset(cr, 0f), Size(size.width - cr, size.height))
+                            if (ct > 0f) drawRect(Color(0x88000000), Offset(cl, 0f), Size(cr - cl, ct))
+                            if (cb < size.height) drawRect(Color(0x88000000), Offset(cl, cb), Size(cr - cl, size.height - cb))
+                            drawRect(
+                                color = Color(0xFFFFD54F),
+                                topLeft = Offset(cl, ct),
+                                size = Size(cr - cl, cb - ct),
+                                style = Stroke(width = 3f)
+                            )
+                        }
+
                         if (meta.showGridOverlay) {
                             when (meta.overlayStyle) {
                                 GridOverlayStyle.VASTU_CHAKRA_32 -> {
-                                    drawVastuChakraCompose(
+                                    drawChakraByTypeCompose(
+                                        chakraType = meta.chakraType,
                                         rotationDegrees = meta.gridRotationDegrees,
                                         textMeasurer = textMeasurer,
                                         transparentFill = true,
@@ -652,7 +847,8 @@ fun LayoutWorkspaceScreen(
                                 }
                                 GridOverlayStyle.BOTH -> {
                                     drawComposeVastuGrid(meta.gridRotationDegrees, textMeasurer)
-                                    drawVastuChakraCompose(
+                                    drawChakraByTypeCompose(
+                                        chakraType = meta.chakraType,
                                         rotationDegrees = meta.gridRotationDegrees,
                                         textMeasurer = textMeasurer,
                                         transparentFill = true,

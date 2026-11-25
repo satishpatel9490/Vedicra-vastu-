@@ -22,10 +22,13 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import com.example.di.VedicraAppContainer
 import com.example.model.MediaKind
+import com.example.model.VastuChakraType
 import com.example.ui.navigation.CameraCaptureRoute
 import com.example.ui.navigation.DashboardRoute
 import com.example.ui.navigation.ExportedPdfsRoute
+import com.example.ui.navigation.LayoutBuilderRoute
 import com.example.ui.navigation.LayoutWorkspaceRoute
+import com.example.ui.navigation.MapCompassAlignRoute
 import com.example.ui.navigation.PhotoViewerRoute
 import com.example.ui.navigation.RecentReportsRoute
 import com.example.ui.navigation.ReportEditorRoute
@@ -35,7 +38,9 @@ import com.example.ui.navigation.SettingsRoute
 import com.example.ui.screens.CameraCaptureScreen
 import com.example.ui.screens.DashboardScreen
 import com.example.ui.screens.ExportedPdfsScreen
+import com.example.ui.screens.LayoutBuilderScreen
 import com.example.ui.screens.LayoutWorkspaceScreen
+import com.example.ui.screens.MapCompassAlignScreen
 import com.example.ui.screens.PhotoViewerScreen
 import com.example.ui.screens.ReportEditorScreen
 import com.example.ui.screens.ReportListScreen
@@ -236,6 +241,22 @@ fun VedicraApp(container: VedicraAppContainer) {
                         onOpenLayoutWorkspace = { mediaId ->
                             navController.navigate(LayoutWorkspaceRoute(mediaId = mediaId))
                         },
+                        onOpenMapAlign = { chakraName ->
+                            navController.navigate(
+                                MapCompassAlignRoute(
+                                    reportId = route.reportId,
+                                    initialChakraType = chakraName
+                                )
+                            )
+                        },
+                        onOpenLayoutBuilder = { mediaId ->
+                            navController.navigate(
+                                LayoutBuilderRoute(
+                                    reportId = route.reportId,
+                                    mediaId = mediaId
+                                )
+                            )
+                        },
                         onShowMessage = ::showMessage
                     )
                 }
@@ -282,6 +303,33 @@ fun VedicraApp(container: VedicraAppContainer) {
                     )
                     LayoutWorkspaceScreen(
                         viewModel = workspaceViewModel,
+                        onBack = { navController.popBackStack() },
+                        onShowMessage = ::showMessage
+                    )
+                }
+
+                composable<MapCompassAlignRoute> { backStackEntry ->
+                    val route = backStackEntry.toRoute<MapCompassAlignRoute>()
+                    val initialChakra = runCatching { VastuChakraType.valueOf(route.initialChakraType) }
+                        .getOrDefault(VastuChakraType.SHAKTI_16_32)
+                    MapCompassAlignScreen(
+                        reportId = route.reportId,
+                        initialChakraType = initialChakra,
+                        repository = container.repository,
+                        onBack = { navController.popBackStack() },
+                        onOpenWorkspace = { mediaId ->
+                            navController.navigate(LayoutWorkspaceRoute(mediaId = mediaId))
+                        },
+                        onShowMessage = ::showMessage
+                    )
+                }
+
+                composable<LayoutBuilderRoute> { backStackEntry ->
+                    val route = backStackEntry.toRoute<LayoutBuilderRoute>()
+                    LayoutBuilderScreen(
+                        reportId = route.reportId,
+                        mediaId = route.mediaId,
+                        repository = container.repository,
                         onBack = { navController.popBackStack() },
                         onShowMessage = ::showMessage
                     )

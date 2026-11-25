@@ -105,6 +105,50 @@ class WorkspaceViewModel(
         )
     }
 
+    fun setChakraType(chakraType: com.example.model.VastuChakraType) {
+        pushUndo()
+        _workspaceMeta.value = _workspaceMeta.value.copy(
+            showGridOverlay = true,
+            chakraType = chakraType
+        )
+    }
+
+    fun updateCropRect(left: Float, top: Float, right: Float, bottom: Float) {
+        val cLeft = left.coerceIn(0f, 0.85f)
+        val cTop = top.coerceIn(0f, 0.85f)
+        val cRight = right.coerceIn(cLeft + 0.1f, 1f)
+        val cBottom = bottom.coerceIn(cTop + 0.1f, 1f)
+        _workspaceMeta.value = _workspaceMeta.value.copy(
+            cropLeft = cLeft,
+            cropTop = cTop,
+            cropRight = cRight,
+            cropBottom = cBottom
+        )
+    }
+
+    fun resetCrop() {
+        pushUndo()
+        _workspaceMeta.value = _workspaceMeta.value.copy(
+            cropLeft = 0f,
+            cropTop = 0f,
+            cropRight = 1f,
+            cropBottom = 1f
+        )
+    }
+
+    fun addEraseStroke(stroke: com.example.model.EraseBrushStroke) {
+        if (stroke.points.isEmpty()) return
+        pushUndo()
+        _workspaceMeta.value = _workspaceMeta.value.copy(
+            eraseStrokes = _workspaceMeta.value.eraseStrokes + stroke
+        )
+    }
+
+    fun clearEraseStrokes() {
+        pushUndo()
+        _workspaceMeta.value = _workspaceMeta.value.copy(eraseStrokes = emptyList())
+    }
+
     fun selectAnnotation(id: String?) {
         _selectedAnnotationId.value = id
     }

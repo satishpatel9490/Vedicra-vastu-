@@ -15,6 +15,7 @@ import com.example.model.AnnotationType
 import com.example.model.GridOverlayStyle
 import com.example.model.LayoutAnnotation
 import com.example.model.VastuChakraSpec
+import com.example.model.VastuChakraType
 import com.example.model.VastuCompassMath
 import com.example.model.WorkspaceMetadata
 import java.util.Locale
@@ -29,37 +30,106 @@ object WorkspaceRenderer {
         sourceBitmap: Bitmap,
         metadata: WorkspaceMetadata
     ): Bitmap {
-        val out = createBitmap(
-            sourceBitmap.width,
-            sourceBitmap.height
-        )
+        val cLeft = metadata.cropLeft.coerceIn(0f, 0.9f)
+        val cTop = metadata.cropTop.coerceIn(0f, 0.9f)
+        val cRight = metadata.cropRight.coerceIn(cLeft + 0.08f, 1f)
+        val cBottom = metadata.cropBottom.coerceIn(cTop + 0.08f, 1f)
+
+        val srcW = sourceBitmap.width
+        val srcH = sourceBitmap.height
+        val workingBitmap = if (cLeft > 0.005f || cTop > 0.005f || cRight < 0.995f || cBottom < 0.995f) {
+            val cropX = (cLeft * srcW).toInt().coerceIn(0, (srcW - 2).coerceAtLeast(0))
+            val cropY = (cTop * srcH).toInt().coerceIn(0, (srcH - 2).coerceAtLeast(0))
+            val cropW = ((cRight - cLeft) * srcW).toInt().coerceIn(2, srcW - cropX)
+            val cropH = ((cBottom - cTop) * srcH).toInt().coerceIn(2, srcH - cropY)
+            Bitmap.createBitmap(sourceBitmap, cropX, cropY, cropW, cropH)
+        } else {
+            sourceBitmap
+        }
+
+        val out = createBitmap(workingBitmap.width, workingBitmap.height)
         val canvas = Canvas(out)
-        canvas.drawBitmap(sourceBitmap, 0f, 0f, null)
+        canvas.drawBitmap(workingBitmap, 0f, 0f, null)
+        if (workingBitmap !== sourceBitmap) {
+            workingBitmap.recycle()
+        }
 
         val w = out.width.toFloat()
         val h = out.height.toFloat()
         val baseUnit = min(w, h) / 40f
 
+        // Paint clean/erase brush strokes (remapped into cropped space if cropped)
+        if (metadata.eraseStrokes.isNotEmpty()) {
+            val spanX = (cRight - cLeft).coerceAtLeast(0.08f)
+            val spanY = (cBottom - cTop).coerceAtLeast(0.08f)
+            val erasePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                style = Paint.Style.STROKE
+                strokeCap = Paint.Cap.ROUND
+                strokeJoin = Paint.Join.ROUND
+            }
+            val dotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+            metadata.eraseStrokes.forEach { stroke ->
+                if (stroke.points.isNotEmpty()) {
+                    val col = stroke.colorHex.toInt()
+                    val strokePx = stroke.radiusNorm * min(w, h) * 2f
+                    erasePaint.color = col
+                    erasePaint.strokeWidth = strokePx
+                    dotPaint.color = col
+                    if (stroke.points.size == 1) {
+                        val pt = stroke.points.first()
+                        val px = ((pt.x - cLeft) / spanX) * w
+                        val py = ((pt.y - cTop) / spanY) * h
+                        canvas.drawCircle(px, py, strokePx / 2f, dotPaint)
+                    } else {
+                        val path = Path()
+                        stroke.points.forEachIndexed { i, pt ->
+                            val px = ((pt.x - cLeft) / spanX) * w
+                            val py = ((pt.y - cTop) / spanY) * h
+                            if (i == 0) path.moveTo(px, py) else path.lineTo(px, py)
+                        }
+                        canvas.drawPath(path, erasePaint)
+                    }
+                }
+            }
+        }
+
         if (metadata.showGridOverlay) {
             when (metadata.overlayStyle) {
                 GridOverlayStyle.VASTU_CHAKRA_32 -> {
-                    drawVastuChakraOverlay(canvas, w, h, metadata.gridRotationDegrees, baseUnit)
+                    drawVastuChakraByType(canvas, w, h, metadata.gridRotationDegrees, baseUnit, metadata.chakraType)
                 }
                 GridOverlayStyle.CLASSIC_9_GRID -> {
                     drawVastuGridOverlay(canvas, w, h, metadata.gridRotationDegrees, baseUnit)
                 }
                 GridOverlayStyle.BOTH -> {
                     drawVastuGridOverlay(canvas, w, h, metadata.gridRotationDegrees, baseUnit)
-                    drawVastuChakraOverlay(canvas, w, h, metadata.gridRotationDegrees, baseUnit)
+                    drawVastuChakraByType(canvas, w, h, metadata.gridRotationDegrees, baseUnit, metadata.chakraType)
                 }
             }
-            drawTopChakraTiltBadge(canvas, w, metadata.gridRotationDegrees, baseUnit)
+            drawTopChakraTiltBadge(canvas, w, metadata.gridRotationDegrees, baseUnit, metadata.chakraType)
         }
 
         metadata.annotations.forEach { annotation ->
             drawAnnotation(canvas, w, h, annotation, baseUnit)
         }
         return out
+    }
+
+    fun drawVastuChakraByType(
+        canvas: Canvas,
+        width: Float,
+        height: Float,
+        rotationDeg: Float,
+        baseUnit: Float,
+        chakraType: VastuChakraType = VastuChakraType.SHAKTI_16_32
+    ) {
+        when (chakraType) {
+            VastuChakraType.SHAKTI_16_32 -> drawVastuChakraOverlay(canvas, width, height, rotationDeg, baseUnit)
+            VastuChakraType.DEVTA_45_MANDALA -> drawDevta45MandalaBitmap(canvas, width, height, rotationDeg)
+            VastuChakraType.PANCH_TATVA_CYCLE -> drawPanchTatvaCycleBitmap(canvas, width, height, rotationDeg)
+            VastuChakraType.MAIN_DOOR_32 -> drawMainDoor32Bitmap(canvas, width, height, rotationDeg)
+            VastuChakraType.PANCH_TATVA_COMPASS -> drawPanchTatvaCompassBitmap(canvas, width, height, rotationDeg)
+        }
     }
 
     /**
@@ -69,13 +139,14 @@ object WorkspaceRenderer {
         canvas: Canvas,
         width: Float,
         gridRotationDeg: Float,
-        baseUnit: Float
+        baseUnit: Float,
+        chakraType: VastuChakraType = VastuChakraType.SHAKTI_16_32
     ) {
         val topFacingDeg = VastuCompassMath.normalizeDegrees(360f - gridRotationDeg)
         val normTilt = VastuCompassMath.normalizeDegrees(gridRotationDeg)
         val topZone = VastuCompassMath.zoneForDegree(topFacingDeg)
         val topPada = VastuCompassMath.padaForDegree(topFacingDeg)
-        val label = "North Tilt: ${String.format(Locale.US, "%.1f", normTilt)}°  •  Top Faces ${String.format(Locale.US, "%.1f", topFacingDeg)}° ${topZone.code} (${topPada.code})"
+        val label = "${chakraType.shortName} • Tilt ${String.format(Locale.US, "%.1f", normTilt)}° • Top ${String.format(Locale.US, "%.1f", topFacingDeg)}° ${topZone.code} (${topPada.code})"
 
         val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.WHITE
@@ -335,6 +406,438 @@ object WorkspaceRenderer {
         strokePaint.color = Color.argb(175, 27, 77, 62)
         strokePaint.strokeWidth = strokeThin
         drawCircle(cx, cy, rBrahma * 0.55f, strokePaint)
+        }
+    }
+
+    private fun drawDevta45MandalaBitmap(
+        canvas: Canvas,
+        width: Float,
+        height: Float,
+        rotationDeg: Float
+    ) {
+        val cx = width / 2f
+        val cy = height / 2f
+        val radius = min(width, height) * 0.455f
+        if (radius < 40f) return
+
+        val rTickOuter = radius * 1.00f
+        val rDegMid = radius * 0.90f
+        val rZoneOuter = radius * 0.855f
+        val rZoneInner = radius * 0.775f
+        val rOrganOuter = radius * 0.775f
+        val rOrganInner = radius * 0.715f
+        val rAttrOuter = radius * 0.715f
+        val rAttrInner = radius * 0.615f
+        val rPadaCodeOuter = radius * 0.615f
+        val rPadaCodeInner = radius * 0.535f
+        val rDevta32Outer = radius * 0.535f
+        val rDevta32Inner = radius * 0.365f
+        val rInnerRingOuter = radius * 0.365f
+        val rBrahma = radius * 0.175f
+
+        val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+        val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
+        val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            textAlign = Paint.Align.CENTER
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        }
+        val strokeThin = (radius * 0.003f).coerceIn(1f, 2f)
+        val strokeMain = (radius * 0.006f).coerceIn(1.5f, 3.5f)
+
+        canvas.withRotation(rotationDeg, cx, cy) {
+            fillPaint.color = Color.argb(90, 255, 255, 255)
+            drawCircle(cx, cy, rTickOuter, fillPaint)
+
+            VastuChakraSpec.zones16.forEach { zone ->
+                val startAngle = zone.centerDegree - 11.25f - 90f
+                drawAndroidRingSector(
+                    this, cx, cy, rZoneInner, rZoneOuter, startAngle, 22.5f,
+                    Color.argb(200, 249, 246, 238), Color.rgb(31, 42, 36), strokeThin, fillPaint, strokePaint
+                )
+                val zc = zone.sectorColorArgb.toInt()
+                drawAndroidRingSector(
+                    this, cx, cy, rAttrInner, rAttrOuter, startAngle, 22.5f,
+                    Color.argb(190, Color.red(zc), Color.green(zc), Color.blue(zc)), Color.rgb(31, 42, 36), strokeThin, fillPaint, strokePaint
+                )
+                drawBitmapRadialLabel(this, zone.code, zone.centerDegree, (rZoneInner + rZoneOuter) / 2f, cx, cy, (radius * 0.036f).coerceAtLeast(10f), Color.rgb(26, 34, 30), textPaint)
+                drawBitmapRadialLabel(this, zone.attributeTitle.substringBefore(" /"), zone.centerDegree, (rAttrInner + rAttrOuter) / 2f, cx, cy, (radius * 0.025f).coerceAtLeast(8f), zone.sectorTextColorArgb.toInt(), textPaint)
+            }
+
+            VastuChakraSpec.organGunaSegments.forEach { seg ->
+                val span = if (seg.endDegree >= seg.startDegree) seg.endDegree - seg.startDegree else 360f - seg.startDegree + seg.endDegree
+                drawAndroidRingSector(
+                    this, cx, cy, rOrganInner, rOrganOuter, seg.startDegree - 90f, span,
+                    if (seg.isGunaBand) Color.argb(205, 220, 227, 223) else Color.argb(205, 243, 246, 244),
+                    Color.rgb(55, 71, 79), strokeThin, fillPaint, strokePaint
+                )
+                drawBitmapRadialLabel(this, seg.label, seg.midDegree, (rOrganInner + rOrganOuter) / 2f, cx, cy, (radius * 0.023f).coerceAtLeast(8f), if (seg.isGunaBand) Color.rgb(27, 77, 62) else Color.rgb(38, 50, 56), textPaint)
+            }
+
+            VastuChakraSpec.padas32.forEach { pada ->
+                val startAngle = pada.startDegree - 90f
+                drawAndroidRingSector(
+                    this, cx, cy, rPadaCodeInner, rPadaCodeOuter, startAngle, VastuChakraSpec.PADA_SPAN_DEGREES,
+                    if (pada.isAuspicious) Color.argb(215, 76, 175, 80) else Color.argb(210, 255, 255, 255),
+                    Color.rgb(31, 42, 36), strokeThin, fillPaint, strokePaint
+                )
+                val outerColor = when {
+                    pada.isAuspicious -> Color.argb(210, 45, 156, 90)
+                    pada.index % 3 == 0 -> Color.argb(210, 245, 216, 54)
+                    pada.index % 3 == 1 -> Color.argb(210, 227, 53, 45)
+                    else -> Color.argb(210, 31, 122, 192)
+                }
+                drawAndroidRingSector(
+                    this, cx, cy, rDevta32Inner, rDevta32Outer, startAngle, VastuChakraSpec.PADA_SPAN_DEGREES,
+                    outerColor, Color.rgb(31, 42, 36), strokeThin, fillPaint, strokePaint
+                )
+                drawBitmapRadialLabel(this, "${pada.code}${pada.signSymbol}", pada.midDegree, (rPadaCodeInner + rPadaCodeOuter) / 2f, cx, cy, (radius * 0.027f).coerceAtLeast(8f), if (pada.isAuspicious) Color.WHITE else Color.rgb(31, 36, 33), textPaint)
+                val rad = Math.toRadians(pada.midDegree.toDouble() - 90.0)
+                val midR = (rDevta32Inner + rDevta32Outer) / 2f
+                val tx = cx + (midR * cos(rad)).toFloat()
+                val ty = cy + (midR * sin(rad)).toFloat()
+                textPaint.color = if (!pada.isAuspicious && pada.index % 3 == 0) Color.rgb(20, 24, 21) else Color.WHITE
+                textPaint.textSize = (radius * 0.026f).coerceAtLeast(8f)
+                val radialRot = if (pada.midDegree in 0f..180f) pada.midDegree - 90f else pada.midDegree + 90f
+                withRotation(radialRot, tx, ty) {
+                    val yOff = -(textPaint.descent() + textPaint.ascent()) / 2f
+                    drawText(pada.deity, tx, ty + yOff, textPaint)
+                }
+            }
+
+            VastuChakraSpec.innerDevtas13.filter { it.ringLayer >= 2 }.forEach { devta ->
+                val dc = devta.fillColorArgb.toInt()
+                drawAndroidRingSector(
+                    this, cx, cy, rBrahma, rInnerRingOuter, devta.startDegree - 90f, devta.sweepDegree,
+                    Color.argb(215, Color.red(dc), Color.green(dc), Color.blue(dc)),
+                    Color.rgb(31, 42, 36), strokeThin, fillPaint, strokePaint
+                )
+                val tCol = if (devta.fillColorArgb == 0xFFF5DE3A) Color.rgb(20, 24, 21) else Color.WHITE
+                drawBitmapRadialLabel(this, "${devta.devtaNumber} ${devta.name.replace("\n", " ")}", devta.midDegree, (rBrahma + rInnerRingOuter) / 2f, cx, cy, (radius * 0.025f).coerceAtLeast(8f), tCol, textPaint)
+            }
+
+            fillPaint.color = Color.argb(235, 247, 229, 92)
+            drawCircle(cx, cy, rBrahma, fillPaint)
+            strokePaint.color = Color.rgb(31, 42, 36)
+            strokePaint.strokeWidth = strokeMain
+            drawCircle(cx, cy, rBrahma, strokePaint)
+            textPaint.color = Color.rgb(26, 34, 30)
+            textPaint.textSize = (radius * 0.036f).coerceAtLeast(11f)
+            drawText("1 BRAHMA", cx, cy - (textPaint.descent() + textPaint.ascent()) / 2f, textPaint)
+
+            drawBitmapOuter360Scale(this, cx, cy, rTickOuter, rZoneOuter, rDegMid, radius, strokeMain, strokeThin, strokePaint, textPaint)
+        }
+    }
+
+    private fun drawPanchTatvaCycleBitmap(
+        canvas: Canvas,
+        width: Float,
+        height: Float,
+        rotationDeg: Float
+    ) {
+        val cx = width / 2f
+        val cy = height / 2f
+        val radius = min(width, height) * 0.45f
+        if (radius < 40f) return
+
+        val rOuterAttr = radius * 0.98f
+        val rAttrInner = radius * 0.80f
+        val rPadaOuter = radius * 0.80f
+        val rPadaInner = radius * 0.70f
+        val rElementOuter = radius * 0.70f
+        val rElementInner = radius * 0.56f
+        val rSupportCircle = radius * 0.47f
+        val rOpposePentagram = radius * 0.34f
+
+        val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+        val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
+        val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            textAlign = Paint.Align.CENTER
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        }
+        val strokeThin = (radius * 0.003f).coerceIn(1f, 2f)
+        val strokeMain = (radius * 0.006f).coerceIn(2f, 4f)
+
+        canvas.withRotation(rotationDeg, cx, cy) {
+            fillPaint.color = Color.argb(95, 250, 249, 245)
+            drawCircle(cx, cy, rOuterAttr, fillPaint)
+
+            VastuChakraSpec.zones16.forEach { zone ->
+                val startAngle = zone.centerDegree - 11.25f - 90f
+                val zc = zone.sectorColorArgb.toInt()
+                drawAndroidRingSector(
+                    this, cx, cy, rAttrInner, rOuterAttr, startAngle, 22.5f,
+                    Color.argb(145, Color.red(zc), Color.green(zc), Color.blue(zc)), Color.rgb(31, 42, 36), strokeThin, fillPaint, strokePaint
+                )
+                drawBitmapRadialLabel(this, zone.code, zone.centerDegree, (rAttrInner + rOuterAttr) / 2f, cx, cy, (radius * 0.032f).coerceAtLeast(10f), Color.rgb(20, 24, 21), textPaint)
+            }
+
+            VastuChakraSpec.padas32.forEach { pada ->
+                drawAndroidRingSector(
+                    this, cx, cy, rPadaInner, rPadaOuter, pada.startDegree - 90f, VastuChakraSpec.PADA_SPAN_DEGREES,
+                    if (pada.isAuspicious) Color.argb(215, 127, 209, 76) else Color.argb(205, 243, 246, 244),
+                    Color.rgb(31, 42, 36), strokeThin, fillPaint, strokePaint
+                )
+                drawBitmapRadialLabel(this, pada.code, pada.midDegree, (rPadaInner + rPadaOuter) / 2f, cx, cy, (radius * 0.030f).coerceAtLeast(9f), Color.rgb(20, 24, 21), textPaint)
+            }
+
+            val elementSlices = listOf(
+                Triple("WATER", 315f to 78.75f, Color.argb(215, 79, 163, 207)),
+                Triple("AIR", 33.75f to 90f, Color.argb(215, 122, 193, 67)),
+                Triple("FIRE", 123.75f to 67.5f, Color.argb(215, 217, 135, 110)),
+                Triple("EARTH", 191.25f to 56.25f, Color.argb(215, 236, 226, 56)),
+                Triple("SPACE", 247.5f to 67.5f, Color.argb(215, 239, 242, 245))
+            )
+            elementSlices.forEach { (name, degs, col) ->
+                drawAndroidRingSector(
+                    this, cx, cy, rElementInner, rElementOuter, degs.first - 90f, degs.second,
+                    col, Color.rgb(31, 42, 36), strokeThin, fillPaint, strokePaint
+                )
+                drawBitmapRadialLabel(this, name, degs.first + degs.second / 2f, (rElementInner + rElementOuter) / 2f, cx, cy, (radius * 0.042f).coerceAtLeast(12f), Color.rgb(20, 24, 21), textPaint)
+            }
+
+            val arcPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                style = Paint.Style.STROKE
+                strokeWidth = strokeMain * 1.4f
+                color = Color.rgb(76, 175, 80)
+                strokeCap = Paint.Cap.ROUND
+            }
+            val supportRect = RectF(cx - rSupportCircle, cy - rSupportCircle, cx + rSupportCircle, cy + rSupportCircle)
+            listOf(0f, 72f, 144f, 216f, 288f).forEach { startDeg ->
+                drawArc(supportRect, startDeg + 12f - 90f, 48f, false, arcPaint)
+            }
+
+            val starPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                style = Paint.Style.STROKE
+                strokeWidth = strokeMain * 1.2f
+                color = Color.rgb(224, 159, 31)
+                strokeCap = Paint.Cap.ROUND
+            }
+            val starOrder = listOf(0f, 144f, 288f, 72f, 216f)
+            for (i in starOrder.indices) {
+                val a1 = Math.toRadians(starOrder[i].toDouble() - 90.0)
+                val a2 = Math.toRadians(starOrder[(i + 1) % starOrder.size].toDouble() - 90.0)
+                drawLine(
+                    cx + rOpposePentagram * cos(a1).toFloat(),
+                    cy + rOpposePentagram * sin(a1).toFloat(),
+                    cx + rOpposePentagram * cos(a2).toFloat(),
+                    cy + rOpposePentagram * sin(a2).toFloat(),
+                    starPaint
+                )
+            }
+            textPaint.color = Color.rgb(181, 110, 0)
+            textPaint.textSize = (radius * 0.03f).coerceAtLeast(10f)
+            drawText("OPPOSE", cx, cy + radius * 0.06f, textPaint)
+        }
+    }
+
+    private fun drawMainDoor32Bitmap(
+        canvas: Canvas,
+        width: Float,
+        height: Float,
+        rotationDeg: Float
+    ) {
+        val cx = width / 2f
+        val cy = height / 2f
+        val radius = min(width, height) * 0.44f
+        if (radius < 40f) return
+
+        val rMarkRing = radius * 0.96f
+        val rDeityRim = radius * 0.83f
+        val rColorBandOuter = radius * 0.75f
+        val rColorBandInner = radius * 0.61f
+        val rCodeInner = radius * 0.45f
+        val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+        val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
+        val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            textAlign = Paint.Align.CENTER
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        }
+        val strokeThin = (radius * 0.003f).coerceIn(1f, 2f)
+
+        canvas.withRotation(rotationDeg, cx, cy) {
+            fillPaint.color = Color.argb(95, 255, 255, 255)
+            drawCircle(cx, cy, rColorBandOuter, fillPaint)
+
+            VastuChakraSpec.padas32.forEach { pada ->
+                val startAngle = pada.startDegree - 90f
+                val bandColor = when {
+                    pada.isAuspicious -> Color.argb(215, 76, 175, 80)
+                    pada.index % 4 == 0 -> Color.argb(200, 31, 101, 179)
+                    pada.index % 4 == 1 -> Color.argb(200, 95, 176, 75)
+                    pada.index % 4 == 2 -> Color.argb(200, 243, 226, 58)
+                    else -> Color.argb(200, 223, 92, 86)
+                }
+                drawAndroidRingSector(
+                    this, cx, cy, rColorBandInner, rColorBandOuter, startAngle, VastuChakraSpec.PADA_SPAN_DEGREES,
+                    bandColor, Color.rgb(31, 42, 36), strokeThin, fillPaint, strokePaint
+                )
+                drawAndroidRingSector(
+                    this, cx, cy, rCodeInner, rColorBandInner, startAngle, VastuChakraSpec.PADA_SPAN_DEGREES,
+                    Color.argb(215, 250, 248, 242), Color.rgb(31, 42, 36), strokeThin, fillPaint, strokePaint
+                )
+                val bRad = Math.toRadians(startAngle.toDouble())
+                strokePaint.color = if (pada.index == 0) Color.rgb(211, 47, 47) else Color.argb(165, 55, 71, 79)
+                strokePaint.strokeWidth = if (pada.index == 0) 3f else strokeThin
+                drawLine(cx, cy, cx + rCodeInner * cos(bRad).toFloat(), cy + rCodeInner * sin(bRad).toFloat(), strokePaint)
+
+                drawBitmapRadialLabel(this, pada.code, pada.midDegree, (rCodeInner + rColorBandInner) / 2f, cx, cy, (radius * 0.040f).coerceAtLeast(11f), Color.rgb(20, 24, 21), textPaint)
+                drawBitmapRadialLabel(this, pada.deity, pada.midDegree, rDeityRim, cx, cy, (radius * 0.030f).coerceAtLeast(9f), Color.rgb(31, 36, 33), textPaint)
+                val mRad = Math.toRadians(pada.midDegree.toDouble() - 90.0)
+                textPaint.color = if (pada.isAuspicious) Color.rgb(46, 125, 50) else Color.rgb(211, 47, 47)
+                textPaint.textSize = (radius * 0.052f).coerceAtLeast(14f)
+                drawText(if (pada.isAuspicious) "✓" else "✗", cx + rMarkRing * cos(mRad).toFloat(), cy + rMarkRing * sin(mRad).toFloat() - (textPaint.descent() + textPaint.ascent()) / 2f, textPaint)
+            }
+            fillPaint.color = Color.rgb(27, 77, 62)
+            drawCircle(cx, cy, radius * 0.05f, fillPaint)
+        }
+    }
+
+    private fun drawPanchTatvaCompassBitmap(
+        canvas: Canvas,
+        width: Float,
+        height: Float,
+        rotationDeg: Float
+    ) {
+        val cx = width / 2f
+        val cy = height / 2f
+        val radius = min(width, height) * 0.45f
+        if (radius < 40f) return
+
+        val rOuter = radius * 0.98f
+        val rRingOuter = radius * 0.87f
+        val rRingInner = radius * 0.69f
+        val rCenter = radius * 0.19f
+        val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
+        val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+        val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            textAlign = Paint.Align.CENTER
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        }
+
+        canvas.withRotation(rotationDeg, cx, cy) {
+            val sweepColors = intArrayOf(
+                Color.argb(215, 94, 179, 126),
+                Color.argb(215, 217, 74, 62),
+                Color.argb(215, 234, 212, 56),
+                Color.argb(215, 223, 228, 232),
+                Color.argb(215, 62, 131, 196),
+                Color.argb(215, 94, 179, 126)
+            )
+            val sweepPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                style = Paint.Style.STROKE
+                strokeWidth = rRingOuter - rRingInner
+                shader = android.graphics.SweepGradient(cx, cy, sweepColors, floatArrayOf(0f, 0.18f, 0.36f, 0.54f, 0.75f, 1f))
+            }
+            drawCircle(cx, cy, (rRingInner + rRingOuter) / 2f, sweepPaint)
+            strokePaint.color = Color.rgb(31, 36, 33)
+            strokePaint.strokeWidth = 2.5f
+            drawCircle(cx, cy, rRingOuter, strokePaint)
+            drawCircle(cx, cy, rRingInner, strokePaint)
+
+            val ringMid = (rRingInner + rRingOuter) / 2f
+            listOf(35f to "Water", 128f to "Fire", 222f to "Earth", 310f to "Air").forEach { (deg, name) ->
+                drawBitmapRadialLabel(this, name, deg, ringMid, cx, cy, (radius * 0.052f).coerceAtLeast(12f), Color.rgb(20, 24, 21), textPaint)
+            }
+            listOf(0f to "N", 90f to "E", 180f to "S", 270f to "W").forEach { (deg, d) ->
+                drawBitmapRadialLabel(this, d, deg, ringMid, cx, cy, (radius * 0.065f).coerceAtLeast(14f), if (d == "N") Color.rgb(211, 47, 47) else Color.rgb(20, 24, 21), textPaint)
+            }
+
+            drawBitmapOuter360Scale(this, cx, cy, rOuter, rRingOuter, (rOuter + rRingOuter) / 2f, radius, 2.5f, 1.2f, strokePaint, textPaint)
+
+            val needleR = rRingInner * 0.88f
+            val baseHalf = rCenter * 0.34f
+            val nPath = Path().apply {
+                moveTo(cx, cy - needleR)
+                lineTo(cx + baseHalf, cy)
+                lineTo(cx - baseHalf, cy)
+                close()
+            }
+            fillPaint.color = Color.rgb(211, 47, 47)
+            drawPath(nPath, fillPaint)
+            fillPaint.color = Color.rgb(26, 58, 84)
+            listOf(90f, 180f, 270f).forEach { rot ->
+                withRotation(rot, cx, cy) {
+                    val p = Path().apply {
+                        moveTo(cx, cy - needleR * 0.88f)
+                        lineTo(cx + baseHalf, cy)
+                        lineTo(cx - baseHalf, cy)
+                        close()
+                    }
+                    drawPath(p, fillPaint)
+                }
+            }
+            fillPaint.color = Color.argb(238, 253, 251, 246)
+            drawCircle(cx, cy, rCenter, fillPaint)
+            drawCircle(cx, cy, rCenter, strokePaint)
+            textPaint.color = Color.rgb(20, 24, 21)
+            textPaint.textSize = (radius * 0.050f).coerceAtLeast(13f)
+            drawText("Ether", cx, cy - (textPaint.descent() + textPaint.ascent()) / 2f, textPaint)
+        }
+    }
+
+    private fun drawBitmapRadialLabel(
+        canvas: Canvas,
+        text: String,
+        angleDeg: Float,
+        midRadius: Float,
+        cx: Float,
+        cy: Float,
+        textSizePx: Float,
+        colorInt: Int,
+        textPaint: Paint
+    ) {
+        val normAngle = VastuCompassMath.normalizeDegrees(angleDeg)
+        val rad = Math.toRadians(normAngle.toDouble() - 90.0)
+        val tx = cx + (midRadius * cos(rad)).toFloat()
+        val ty = cy + (midRadius * sin(rad)).toFloat()
+        textPaint.color = colorInt
+        textPaint.textSize = textSizePx
+        val textRot = if (normAngle > 100f && normAngle < 260f) normAngle + 180f else normAngle
+        canvas.withRotation(textRot, tx, ty) {
+            val yOff = -(textPaint.descent() + textPaint.ascent()) / 2f
+            drawText(text, tx, ty + yOff, textPaint)
+        }
+    }
+
+    private fun drawBitmapOuter360Scale(
+        canvas: Canvas,
+        cx: Float,
+        cy: Float,
+        rTickOuter: Float,
+        rTickInner: Float,
+        rDegMid: Float,
+        radius: Float,
+        strokeMain: Float,
+        strokeThin: Float,
+        strokePaint: Paint,
+        textPaint: Paint
+    ) {
+        strokePaint.color = Color.rgb(27, 77, 62)
+        strokePaint.strokeWidth = strokeMain
+        canvas.drawCircle(cx, cy, rTickOuter, strokePaint)
+        for (deg in 0 until 360 step 2) {
+            val angleRad = Math.toRadians(deg.toDouble() - 90.0)
+            val len = if (deg % 10 == 0) (rTickOuter - rTickInner) * 0.7f else (rTickOuter - rTickInner) * 0.35f
+            strokePaint.color = if (deg == 0) Color.rgb(211, 47, 47) else Color.rgb(38, 50, 56)
+            strokePaint.strokeWidth = if (deg % 10 == 0) strokeThin * 1.4f else strokeThin * 0.8f
+            canvas.drawLine(
+                cx + (rTickOuter - len) * cos(angleRad).toFloat(),
+                cy + (rTickOuter - len) * sin(angleRad).toFloat(),
+                cx + rTickOuter * cos(angleRad).toFloat(),
+                cy + rTickOuter * sin(angleRad).toFloat(),
+                strokePaint
+            )
+            if (deg % 10 == 0) {
+                val tx = cx + (rDegMid * cos(angleRad)).toFloat()
+                val ty = cy + (rDegMid * sin(angleRad)).toFloat()
+                textPaint.color = if (deg == 0) Color.rgb(211, 47, 47) else Color.rgb(26, 34, 30)
+                textPaint.textSize = (radius * 0.036f).coerceAtLeast(10f)
+                val lbl = if (deg == 0) "0°" else "$deg"
+                canvas.withRotation(deg.toFloat(), tx, ty) {
+                    val yOff = -(textPaint.descent() + textPaint.ascent()) / 2f
+                    drawText(lbl, tx, ty + yOff, textPaint)
+                }
+            }
         }
     }
 

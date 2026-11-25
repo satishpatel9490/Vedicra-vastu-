@@ -446,10 +446,11 @@ class VedicraVastuComprehensiveTest {
         }
         composeRule.waitForIdle()
 
-        // Degrees & Compass tab at index 2; Unified Problems & Remedies tab at index 4; total 9 tabs (0..8)
+        // Degrees & Compass at index 2; Entrance Details at index 3; Unified Problems & Remedies at index 5; total 10 tabs (0..9)
         composeRule.onNodeWithTag("editor_tab_2").performScrollTo().assertIsDisplayed().assertTextEquals("Degrees & Compass")
-        composeRule.onNodeWithTag("editor_tab_4").performScrollTo().assertIsDisplayed().assertTextEquals("Problems & Remedies")
-        assertEquals(0, composeRule.onAllNodesWithTag("editor_tab_9").fetchSemanticsNodes().size)
+        composeRule.onNodeWithTag("editor_tab_3").performScrollTo().assertIsDisplayed().assertTextEquals("Entrance Details")
+        composeRule.onNodeWithTag("editor_tab_5").performScrollTo().assertIsDisplayed().assertTextEquals("Problems & Remedies")
+        assertEquals(0, composeRule.onAllNodesWithTag("editor_tab_10").fetchSemanticsNodes().size)
         assertEquals(0, composeRule.onAllNodesWithText("Analysis Table").fetchSemanticsNodes().size)
         assertEquals(0, composeRule.onAllNodesWithText("Problems").fetchSemanticsNodes().size)
         assertEquals(0, composeRule.onAllNodesWithText("Remedies").fetchSemanticsNodes().size)

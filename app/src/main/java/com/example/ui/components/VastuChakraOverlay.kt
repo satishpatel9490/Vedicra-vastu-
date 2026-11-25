@@ -233,6 +233,7 @@ fun CompassTopDegreeTiltHud(
 fun VastuChakraCanvas(
     rotationDegrees: Float,
     modifier: Modifier = Modifier,
+    chakraType: com.example.model.VastuChakraType = com.example.model.VastuChakraType.SHAKTI_16_32,
     transparentFill: Boolean = true,
     showDeityNames: Boolean = true,
     showTopLubberNeedle: Boolean = false,
@@ -241,7 +242,8 @@ fun VastuChakraCanvas(
 ) {
     val textMeasurer = rememberTextMeasurer()
     Canvas(modifier = modifier) {
-        drawVastuChakraCompose(
+        drawChakraByTypeCompose(
+            chakraType = chakraType,
             rotationDegrees = rotationDegrees,
             textMeasurer = textMeasurer,
             transparentFill = transparentFill,

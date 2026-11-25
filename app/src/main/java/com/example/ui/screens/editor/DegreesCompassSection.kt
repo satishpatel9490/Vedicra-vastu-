@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -16,7 +15,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddLocationAlt
 import androidx.compose.material.icons.filled.CheckCircle
@@ -24,12 +25,12 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DoorFront
 import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.Explore
+import androidx.compose.material.icons.filled.Map
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -50,10 +51,13 @@ import com.example.data.local.ReportEntity
 import com.example.model.CompassAccuracy
 import com.example.model.CompassReading
 import com.example.model.EntranceDetail
+import com.example.model.VastuChakraType
 import com.example.model.VastuCompassMath
 import com.example.model.VastuConstants
 import com.example.sensor.rememberVastuCompassState
+import com.example.ui.components.ChakraTypeSelectorRow
 import com.example.ui.components.CompassTopDegreeTiltHud
+import com.example.ui.components.ManualDegreeInputControl
 import com.example.ui.components.PrimaryDarkGreenButton
 import com.example.ui.components.VastuChakraCanvas
 import com.example.ui.components.VedicraDropdownField
@@ -79,7 +83,8 @@ fun DegreesAndCompassSection(
     report: ReportEntity,
     onUpdate: ((ReportEntity) -> ReportEntity) -> Unit,
     onAddEntrance: (EntranceDetail) -> Unit,
-    onShowMessage: (String) -> Unit
+    onShowMessage: (String) -> Unit,
+    onOpenMapAlign: (VastuChakraType) -> Unit = {}
 ) {
     val liveCompass by rememberVastuCompassState(enabled = true)
     var useManualDial by remember(liveCompass.hasHardwareSensors) {
@@ -88,6 +93,7 @@ fun DegreesAndCompassSection(
     var manualAzimuthDeg by remember { mutableFloatStateOf(0f) }
     var isLocked by remember { mutableStateOf(false) }
     var lockedReading by remember { mutableStateOf<CompassReading?>(null) }
+    var selectedChakraType by remember { mutableStateOf(VastuChakraType.SHAKTI_16_32) }
 
     val activeReading = remember(liveCompass, useManualDial, manualAzimuthDeg, isLocked, lockedReading) {
         val current = if (useManualDial || !liveCompass.hasHardwareSensors) {
@@ -113,14 +119,14 @@ fun DegreesAndCompassSection(
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         VedicraSectionCard(
             title = "COMPASS",
-            subtitle = "Shakti Chakra • 32 Padas & 16 Zones • 0°/360° North lies between N4 & N5",
+            subtitle = selectedChakraType.subtitle,
             icon = Icons.Filled.Explore
         ) {
             // Top Degree & Tilt HUD
             CompassTopDegreeTiltHud(
                 reading = activeReading,
                 isLocked = isLocked,
-                titlePrefix = "SHAKTI CHAKRA",
+                titlePrefix = selectedChakraType.shortName.uppercase(Locale.US),
                 onToggleLock = {
                     if (!isLocked) {
                         lockedReading = activeReading
@@ -129,7 +135,14 @@ fun DegreesAndCompassSection(
                 }
             )
 
-            // Interactive Shakti Chakra rotating/tilting with Compass North 0° (between N4 & N5)
+            // Chakra Selector Switch (Shakti, 45 Devta, Panch Tatva, Main Door, Tatva Dial)
+            ChakraTypeSelectorRow(
+                selectedType = selectedChakraType,
+                onSelectType = { selectedChakraType = it },
+                tagPrefix = "degrees_chakra"
+            )
+
+            // Interactive Selected Vastu Chakra rotating/tilting with Compass North 0°
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -138,6 +151,7 @@ fun DegreesAndCompassSection(
             ) {
                 VastuChakraCanvas(
                     rotationDegrees = -activeReading.azimuthDeg,
+                    chakraType = selectedChakraType,
                     transparentFill = false,
                     showDeityNames = true,
                     showTopLubberNeedle = true,
@@ -151,7 +165,7 @@ fun DegreesAndCompassSection(
                 )
             }
 
-            // Sensor vs Manual Dial Controls
+            // Sensor vs Manual Dial + Magnetic Field Readout
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -167,15 +181,15 @@ fun DegreesAndCompassSection(
                 FilterChip(
                     selected = useManualDial || !liveCompass.hasHardwareSensors,
                     onClick = { useManualDial = true },
-                    label = { Text("Manual Dial") },
+                    label = { Text("Manual Input") },
                     modifier = Modifier.testTag("compass_manual_mode_chip")
                 )
                 Spacer(Modifier.weight(1f))
                 Text(
-                    text = if (activeReading.pada.isAuspicious) {
-                        "${activeReading.pada.code} ${activeReading.pada.deity} ✓"
+                    text = if (activeReading.magneticFieldMicroTesla > 0f) {
+                        "${activeReading.pada.code} ${if (activeReading.pada.isAuspicious) "✓" else "✗"} • ${activeReading.magneticFieldMicroTesla.toInt()} μT"
                     } else {
-                        "${activeReading.pada.code} ${activeReading.pada.deity} ✗"
+                        "${activeReading.pada.code} ${activeReading.pada.deity} ${if (activeReading.pada.isAuspicious) "✓" else "✗"}"
                     },
                     style = MaterialTheme.typography.labelLarge,
                     color = if (activeReading.pada.isAuspicious) Color(0xFF2E7D32) else MaterialTheme.colorScheme.error,
@@ -184,35 +198,23 @@ fun DegreesAndCompassSection(
             }
 
             if (useManualDial || !liveCompass.hasHardwareSensors) {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            text = "${String.format(Locale.US, "%.1f", manualAzimuthDeg)}°",
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Slider(
-                            value = manualAzimuthDeg,
-                            onValueChange = {
-                                manualAzimuthDeg = it
-                                if (isLocked) {
-                                    lockedReading = activeReading.copy(
-                                        azimuthDeg = it,
-                                        zone = VastuCompassMath.zoneForDegree(it),
-                                        pada = VastuCompassMath.padaForDegree(it)
-                                    )
-                                }
-                            },
-                            valueRange = 0f..360f,
-                            modifier = Modifier
-                                .weight(1f)
-                                .testTag("compass_manual_degree_slider")
-                        )
-                    }
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    ManualDegreeInputControl(
+                        degrees = manualAzimuthDeg,
+                        onDegreesChange = { deg ->
+                            manualAzimuthDeg = deg
+                            if (isLocked) {
+                                lockedReading = activeReading.copy(
+                                    azimuthDeg = deg,
+                                    zone = VastuCompassMath.zoneForDegree(deg),
+                                    pada = VastuCompassMath.padaForDegree(deg)
+                                )
+                            }
+                        },
+                        label = "Enter Degree / Tilt Angle",
+                        showSlider = true,
+                        tagPrefix = "compass_manual_degree"
+                    )
                     FlowRow(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalArrangement = Arrangement.spacedBy(4.dp)
@@ -227,6 +229,20 @@ fun DegreesAndCompassSection(
                         }
                     }
                 }
+            }
+
+            // Map & Satellite Alignment Launch Button
+            OutlinedButton(
+                onClick = { onOpenMapAlign(selectedChakraType) },
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+                    .testTag("open_map_compass_align_button")
+            ) {
+                Icon(Icons.Filled.Map, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Open Satellite Map & GPS Alignment")
             }
 
             // Quick Capture Actions to Note Degrees Directly Into the Report
@@ -283,7 +299,7 @@ fun DegreesAndCompassSection(
                         OutlinedButton(
                             onClick = {
                                 val status = if (activeReading.pada.isAuspicious) "Auspicious ✓" else "Inauspicious ✗"
-                                val entranceNote = "Main Door: $formattedHeading • ${activeReading.pada.code} ${activeReading.pada.deity} ($status)"
+                                val entranceNote = "Main Door: $formattedHeading • ${activeReading.pada.code} ${activeReading.pada.deity} ($status)\nEffect: ${activeReading.pada.entranceEffect}"
                                 onUpdate { curr ->
                                     curr.copy(
                                         mainEntranceDirection = mappedDirection,
@@ -309,9 +325,9 @@ fun DegreesAndCompassSection(
                                 onAddEntrance(
                                     EntranceDetail(
                                         direction = mappedDirection,
-                                        label = "Compass Reading",
+                                        label = "${activeReading.pada.code} ${activeReading.pada.deity}",
                                         degrees = formattedHeading,
-                                        notes = "${activeReading.zone.attributeTitle} • $status"
+                                        notes = "$status • ${activeReading.pada.entranceEffect}"
                                     )
                                 )
                                 onShowMessage("Added entrance degree: $formattedHeading")
@@ -373,9 +389,8 @@ fun DegreesAndCompassSection(
 }
 
 /**
- * Standalone Shakti Chakra Compass modal accessible directly from the Home Dashboard.
+ * Standalone Vastu Chakra Compass modal accessible directly from the Home Dashboard.
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ShaktiChakraCompassDialog(
     onDismiss: () -> Unit
@@ -387,6 +402,7 @@ fun ShaktiChakraCompassDialog(
     var manualAzimuthDeg by remember { mutableFloatStateOf(0f) }
     var isLocked by remember { mutableStateOf(false) }
     var lockedReading by remember { mutableStateOf<CompassReading?>(null) }
+    var selectedChakraType by remember { mutableStateOf(VastuChakraType.SHAKTI_16_32) }
 
     val activeReading = remember(liveCompass, useManualDial, manualAzimuthDeg, isLocked, lockedReading) {
         val current = if (useManualDial || !liveCompass.hasHardwareSensors) {
@@ -416,7 +432,9 @@ fun ShaktiChakraCompassDialog(
                 .testTag("dashboard_shakti_chakra_dialog")
         ) {
             Column(
-                modifier = Modifier.padding(14.dp),
+                modifier = Modifier
+                    .verticalScroll(rememberScrollState())
+                    .padding(14.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Row(
@@ -424,31 +442,37 @@ fun ShaktiChakraCompassDialog(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "SHAKTI CHAKRA COMPASS",
+                            text = selectedChakraType.displayName.uppercase(Locale.US),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "0°/360° North between N4 & N5 • 32 Padas & 16 Zones",
+                            text = selectedChakraType.subtitle,
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                     IconButton(onClick = onDismiss) {
-                        Icon(Icons.Filled.Close, contentDescription = "Close Shakti Chakra")
+                        Icon(Icons.Filled.Close, contentDescription = "Close Chakra Compass")
                     }
                 }
 
                 CompassTopDegreeTiltHud(
                     reading = activeReading,
                     isLocked = isLocked,
-                    titlePrefix = "SHAKTI CHAKRA",
+                    titlePrefix = selectedChakraType.shortName.uppercase(Locale.US),
                     onToggleLock = {
                         if (!isLocked) lockedReading = activeReading
                         isLocked = !isLocked
                     }
+                )
+
+                ChakraTypeSelectorRow(
+                    selectedType = selectedChakraType,
+                    onSelectType = { selectedChakraType = it },
+                    tagPrefix = "dialog_chakra"
                 )
 
                 Box(
@@ -457,13 +481,14 @@ fun ShaktiChakraCompassDialog(
                 ) {
                     VastuChakraCanvas(
                         rotationDegrees = -activeReading.azimuthDeg,
+                        chakraType = selectedChakraType,
                         transparentFill = false,
                         showDeityNames = true,
                         showTopLubberNeedle = true,
                         tiltRollDeg = activeReading.rollDeg,
                         tiltPitchDeg = activeReading.pitchDeg,
                         modifier = Modifier
-                            .widthIn(max = 350.dp)
+                            .widthIn(max = 340.dp)
                             .fillMaxWidth()
                             .aspectRatio(1f)
                     )
@@ -484,16 +509,17 @@ fun ShaktiChakraCompassDialog(
                     FilterChip(
                         selected = useManualDial || !liveCompass.hasHardwareSensors,
                         onClick = { useManualDial = true },
-                        label = { Text("Manual Dial") }
+                        label = { Text("Manual Input") }
                     )
                 }
 
                 if (useManualDial || !liveCompass.hasHardwareSensors) {
-                    Slider(
-                        value = manualAzimuthDeg,
-                        onValueChange = { manualAzimuthDeg = it },
-                        valueRange = 0f..360f,
-                        modifier = Modifier.fillMaxWidth()
+                    ManualDegreeInputControl(
+                        degrees = manualAzimuthDeg,
+                        onDegreesChange = { manualAzimuthDeg = it },
+                        label = "Enter Manual Degree",
+                        showSlider = true,
+                        tagPrefix = "dialog_manual_degree"
                     )
                 }
             }

@@ -87,11 +87,14 @@ import com.example.data.local.MediaFileManager
 import com.example.data.local.SiteMediaEntity
 import com.example.data.repository.VastuRepository
 import com.example.model.MediaKind
+import com.example.model.VastuChakraType
 import com.example.model.VastuCompassMath
 import com.example.sensor.rememberVastuCompassState
 import com.example.ui.components.CameraCompassMode
+import com.example.ui.components.ChakraTypeSelectorRow
 import com.example.ui.components.CompactCardinalDialCanvas
 import com.example.ui.components.CompassTopDegreeTiltHud
+import com.example.ui.components.ManualDegreeInputControl
 import com.example.ui.components.VastuChakraCanvas
 import kotlinx.coroutines.launch
 import java.io.File
@@ -202,6 +205,7 @@ fun CameraCaptureScreen(
     var isCapturing by remember { mutableStateOf(false) }
 
     var compassMode by remember { mutableStateOf(CameraCompassMode.FULL_CHAKRA) }
+    var selectedChakraType by remember { mutableStateOf(VastuChakraType.SHAKTI_16_32) }
     var isHeadingLocked by remember { mutableStateOf(false) }
     var manualAzimuthDeg by remember { mutableFloatStateOf(0f) }
 
@@ -287,6 +291,7 @@ fun CameraCaptureScreen(
             if (compassMode == CameraCompassMode.FULL_CHAKRA) {
                 VastuChakraCanvas(
                     rotationDegrees = -activeCompass.azimuthDeg,
+                    chakraType = selectedChakraType,
                     transparentFill = true,
                     showDeityNames = true,
                     showTopLubberNeedle = true,
@@ -438,6 +443,7 @@ fun CameraCaptureScreen(
                     CompassTopDegreeTiltHud(
                         reading = activeCompass,
                         isLocked = isHeadingLocked,
+                        titlePrefix = selectedChakraType.shortName.uppercase(Locale.US),
                         onToggleLock = {
                             if (!isHeadingLocked) {
                                 lockedReading = activeCompass
@@ -445,6 +451,13 @@ fun CameraCaptureScreen(
                             isHeadingLocked = !isHeadingLocked
                         }
                     )
+                    if (compassMode == CameraCompassMode.FULL_CHAKRA) {
+                        ChakraTypeSelectorRow(
+                            selectedType = selectedChakraType,
+                            onSelectType = { selectedChakraType = it },
+                            tagPrefix = "camera_chakra"
+                        )
+                    }
                 }
             }
 
@@ -459,23 +472,14 @@ fun CameraCaptureScreen(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 if (compassMode != CameraCompassMode.OFF && !activeCompass.hasHardwareSensors) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text("Compass", color = Color(0xFFD4AF37), style = MaterialTheme.typography.labelSmall)
-                        Slider(
-                            value = manualAzimuthDeg,
-                            onValueChange = { manualAzimuthDeg = it },
-                            valueRange = 0f..360f,
-                            modifier = Modifier.weight(1f)
-                        )
-                        Text(
-                            text = "${manualAzimuthDeg.toInt()}°",
-                            color = Color(0xFFD4AF37),
-                            style = MaterialTheme.typography.labelSmall
-                        )
-                    }
+                    ManualDegreeInputControl(
+                        degrees = manualAzimuthDeg,
+                        onDegreesChange = { manualAzimuthDeg = it },
+                        label = "Manual Heading / Tilt",
+                        showSlider = true,
+                        darkSurface = true,
+                        tagPrefix = "camera_manual_degree"
+                    )
                 }
 
                 Row(

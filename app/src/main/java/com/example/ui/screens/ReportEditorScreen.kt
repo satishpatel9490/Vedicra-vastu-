@@ -62,6 +62,7 @@ import com.example.ui.components.ThemeSelectorMenu
 import com.example.ui.screens.editor.ClientDetailsSection
 import com.example.ui.screens.editor.ConsultantNotesSection
 import com.example.ui.screens.editor.DegreesAndCompassSection
+import com.example.ui.screens.editor.EntranceDetailsSection
 import com.example.ui.screens.editor.PdfGenerateAndShareSection
 import com.example.ui.screens.editor.PropertyDetailsSection
 import com.example.ui.screens.editor.SiteDrawingsAndWorkspaceSection
@@ -76,6 +77,7 @@ private val editorTabTitles = listOf(
     "Client",
     "Property",
     "Degrees & Compass",
+    "Entrance Details",
     "Swar & Energy",
     "Problems & Remedies",
     "Notes",
@@ -102,6 +104,8 @@ fun ReportEditorScreen(
     ) -> Unit,
     onOpenPhotoViewer: (String) -> Unit,
     onOpenLayoutWorkspace: (String) -> Unit,
+    onOpenMapAlign: (String) -> Unit = {},
+    onOpenLayoutBuilder: (String?) -> Unit = {},
     onShowMessage: (String) -> Unit
 ) {
     val context = LocalContext.current
@@ -321,14 +325,22 @@ fun ReportEditorScreen(
                             report = report,
                             onUpdate = viewModel::updateReportField,
                             onAddEntrance = viewModel::addAdditionalEntrance,
+                            onShowMessage = onShowMessage,
+                            onOpenMapAlign = { chakra -> onOpenMapAlign(chakra.name) }
+                        )
+                        3 -> EntranceDetailsSection(
+                            report = report,
+                            onUpdate = viewModel::updateReportField,
+                            onAddEntrance = viewModel::addAdditionalEntrance,
+                            onDeleteEntrance = viewModel::deleteAdditionalEntrance,
                             onShowMessage = onShowMessage
                         )
-                        3 -> SwarAndLandEnergySection(
+                        4 -> SwarAndLandEnergySection(
                             report = report,
                             onUpdate = viewModel::updateReportField,
                             onToggleGuna = viewModel::toggleGuna
                         )
-                        4 -> UnifiedProblemsAnalysisRemediesSection(
+                        5 -> UnifiedProblemsAnalysisRemediesSection(
                             report = report,
                             rows = analysisRows,
                             mediaItems = allMedia,
@@ -341,13 +353,13 @@ fun ReportEditorScreen(
                             onDeleteRow = viewModel::deleteAnalysisRow,
                             onToggleRowAttachment = viewModel::toggleRowMediaAttachment
                         )
-                        5 -> ConsultantNotesSection(
+                        6 -> ConsultantNotesSection(
                             report = report,
                             onUpdateNote = viewModel::updateConsultantNote,
                             onAddMoreNote = viewModel::addMoreConsultantNote,
                             onDeleteNote = viewModel::deleteConsultantNote
                         )
-                        6 -> SitePhotographySection(
+                        7 -> SitePhotographySection(
                             photos = sitePhotos,
                             onCaptureFromCamera = {
                                 onLaunchCamera(MediaKind.PHOTO.name, "", "", "", "", "", "")
@@ -361,7 +373,7 @@ fun ReportEditorScreen(
                             onMoveOrder = viewModel::moveMediaOrder,
                             onDeleteMedia = viewModel::deleteMedia
                         )
-                        7 -> SiteDrawingsAndWorkspaceSection(
+                        8 -> SiteDrawingsAndWorkspaceSection(
                             drawings = siteDrawings,
                             onCaptureDrawing = { cat, title, floor, orient, desc, notes ->
                                 onLaunchCamera(
@@ -391,9 +403,10 @@ fun ReportEditorScreen(
                             onUpdateDrawing = viewModel::updateMediaDetails,
                             onMarkMainLayout = viewModel::setMainSiteLayout,
                             onMoveOrder = viewModel::moveMediaOrder,
-                            onDeleteDrawing = viewModel::deleteMedia
+                            onDeleteDrawing = viewModel::deleteMedia,
+                            onOpenLayoutBuilder = onOpenLayoutBuilder
                         )
-                        8 -> {
+                        9 -> {
                             val currentBundle = bundle
                             if (currentBundle != null) {
                                 PdfGenerateAndShareSection(
